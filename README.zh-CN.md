@@ -22,45 +22,16 @@
 
 ## 安装
 
-本仓库是私有仓库。请先确保 Git、GitHub CLI 或 SSH 已经能够访问
-`git@github.com:tisfeng/skills.git`。
-
-使用最新稳定版本（推荐）：
-
-```bash
-npx skills add 'tisfeng/skills#v0.1.0' --list
-```
-
-跟随 `main` 分支的最新改动：
-
-```bash
-npx skills add tisfeng/skills --list
-```
-
 将全部技能安装到 Codex 全局目录：
 
 ```bash
 npx skills add 'tisfeng/skills#v0.1.0' --skill '*' --global --agent codex --yes
 ```
 
-只为当前项目安装 PR review 组合：
+将全部技能安装到当前项目：
 
 ```bash
-npx skills add 'tisfeng/skills#v0.1.0' \
-  --skill review \
-  --skill review-pr \
-  --agent codex \
-  --yes
-```
-
-只为当前项目安装 worktree 交付组合：
-
-```bash
-npx skills add 'tisfeng/skills#v0.1.0' \
-  --skill git-commit \
-  --skill worktree-rebase-merge \
-  --agent codex \
-  --yes
+npx skills add 'tisfeng/skills#v0.1.0' --skill '*' --agent codex --yes
 ```
 
 默认安装范围是当前项目；`--global` 将技能安装到对应 Agent 的用户目录。Codex 的项目

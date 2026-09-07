@@ -23,45 +23,16 @@ to push, merge, comment, or perform other remote writes merely by being invoked.
 
 ## Installation
 
-This is a private repository. Make sure Git, GitHub CLI, or SSH can access
-`git@github.com:tisfeng/skills.git` before installing.
-
-Use the latest stable release (recommended):
-
-```bash
-npx skills add 'tisfeng/skills#v0.1.0' --list
-```
-
-Follow the latest changes on `main`:
-
-```bash
-npx skills add tisfeng/skills --list
-```
-
 Install every skill globally for Codex:
 
 ```bash
 npx skills add 'tisfeng/skills#v0.1.0' --skill '*' --global --agent codex --yes
 ```
 
-Install the pull-request review pair for the current project:
+Install every skill for the current project:
 
 ```bash
-npx skills add 'tisfeng/skills#v0.1.0' \
-  --skill review \
-  --skill review-pr \
-  --agent codex \
-  --yes
-```
-
-Install the worktree delivery pair for the current project:
-
-```bash
-npx skills add 'tisfeng/skills#v0.1.0' \
-  --skill git-commit \
-  --skill worktree-rebase-merge \
-  --agent codex \
-  --yes
+npx skills add 'tisfeng/skills#v0.1.0' --skill '*' --agent codex --yes
 ```
 
 The default installation scope is the current project. `--global` installs skills in the selected
