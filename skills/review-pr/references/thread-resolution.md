@@ -52,8 +52,8 @@ python3 "<review-pr-skill-dir>/scripts/review_threads.py" apply --plan PLAN.json
 ```
 
 helper 每条操作前重新 collect，核对 PR 身份、开放状态、远程 head、thread 内容和
-`viewerCanResolve`，已 resolved 则幂等跳过；head 漂移停止后续处理，thread 漂移跳过
-该项。重新阅读变化并重新判定后生成新 plan，不自动改写旧 plan 的 SHA/指纹。
+`viewerCanResolve`。已解决的线程直接跳过；PR head 变化时停止后续处理，线程内容变化时
+跳过该线程。重新阅读变化并重新判定后生成新 plan，不自动改写旧 plan 的 SHA/指纹。
 
 mutation 后再次 collect 读回状态。异常可能意味着请求已经生效；保留结果并重新
 collect 确认，不盲目重试、不自动 unresolve。输出保留 evidence/permalink，报告

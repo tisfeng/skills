@@ -18,8 +18,8 @@ compatible agents through the [`skills`](https://github.com/vercel-labs/skills) 
 | `worktree-rebase-merge` | Commit worktree changes, rebase them, and safely merge into a target branch | `git-commit` |
 
 A project's own `AGENTS.md`, build configuration, validation rules, and explicit user instructions
-always take precedence. Each skill preserves its authorization boundaries and does not gain permission
-to push, merge, comment, or perform other remote writes merely by being invoked.
+always take precedence. Each skill performs remote actions only when the current request and its
+workflow authorize them.
 
 ## Installation
 

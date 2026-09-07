@@ -17,8 +17,8 @@
 | `submit-pr` | 规划、推送并创建或复用 GitHub Pull Request | 需要提交时使用 `git-commit` |
 | `worktree-rebase-merge` | 提交 worktree 变更，rebase 并安全合并到目标分支 | `git-commit` |
 
-项目自己的 `AGENTS.md`、构建配置、验证规则和用户明确要求始终优先。各 skill 保留自己的
-授权边界，不会因为被调用而自动获得 push、merge、评论或其他远程写入权限。
+项目自己的 `AGENTS.md`、构建配置、验证规则和用户明确要求始终优先。各 skill 仅在当前
+请求和自身工作流授权时执行 push、merge、评论或其他远程操作。
 
 ## 安装
 

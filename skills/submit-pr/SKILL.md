@@ -116,8 +116,8 @@ python3 "<submit-pr-skill-dir>/scripts/submit_pr.py" plan \
 ## 恢复与停止条件
 
 - 远程任务分支不存在：创建。
-- 远程和冻结 SHA 相同：复用。
-- 远程是冻结 SHA 的祖先：允许普通 fast-forward push。
+- 远程任务分支指向计划中记录的提交：复用。
+- 远程任务分支是计划中记录提交的祖先：允许普通 fast-forward push。
 - 远程领先或分叉：停止，绝不 force push。
 - push 成功而 PR 创建失败：保留远程分支；重复原命令继续创建。
 - PR 已创建而最终验证中断：重复原命令查找相同 repository/base/head PR 并重新验证。

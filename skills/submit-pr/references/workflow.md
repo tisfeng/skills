@@ -1,7 +1,7 @@
 # submit-pr 工作流契约
 
-本文件定义 `submit-pr` helper 与调用 Agent 之间的确定性边界。执行 `plan`、默认或
-`draft` 模式时都要完整阅读。
+本文件说明 `submit_pr.py` 与调用 Agent 的职责，以及各阶段的检查和执行规则。执行
+`plan`、默认或 `draft` 模式时都要完整阅读。
 
 ## Repository 拓扑发现
 

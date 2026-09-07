@@ -74,7 +74,9 @@ CI 与本地验证：仅列出实际结果和限制。
 **范围与快照**
 
 - 范围：<PR 目标、关联 issue 与审查边界>。
-- 远程 Head、Base、Merge-base：<各自完整 SHA>。
+- 远程 Head：<完整 SHA>。
+- Base：<完整 SHA>。
+- Merge-base：<完整 SHA>。
 
 **本地准备**
 

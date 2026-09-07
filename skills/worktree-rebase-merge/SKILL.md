@@ -11,10 +11,9 @@ description: 完成 worktree 变更：必要时为 detached checkout 创建 Conv
 
 ## 执行协议
 
-主 Agent 在确认集成授权、允许路径、初始 Git 快照和用户限制后，选择一个实际执行者。
-执行者可以是主 Agent，也可以是串行委派的可用 Agent；没有项目级配置或可用执行 Agent 时，
-主 Agent 按相同的预检、重验、执行和报告协议完成工作。下文的“执行者”统一指实际执行
-Git 写操作的 Agent。
+Git 写操作由一个执行者完成，可由主 Agent 自行执行或串行委派。开始前，主 Agent 确认
+集成授权、允许路径、初始 Git 快照和用户限制。下文的“执行者”指实际执行 Git 写操作的
+Agent。
 
 1. 预检阶段只读：执行者解析目标、检查源/目标 worktree、识别是否需要
    新提交，并返回预检证据和完整提交信息草稿。不得创建分支、临时 worktree、暂存或写入
@@ -22,15 +21,14 @@ Git 写操作的 Agent。
 2. 若需要新提交，主 Agent 必须在主对话中原样显示 `提交信息预览` 和完整草稿。默认模式
    显示后可继续；确认、仅预览或仅草稿模式必须等待用户。若源已提交且干净，返回
    `preexisting-source-commit`，无需提交信息预览。
-3. 进入写入阶段前，执行者重新检查 HEAD、索引、源/目标 worktree 和范围。任何漂移都会
-   使草稿失效，保留现场且不得写入。
+3. 进入写入阶段前，执行者重新检查 HEAD、索引、源/目标 worktree 和范围。这些状态与
+   预检记录不一致时，停止写入；原提交草稿不再适用。
 4. 通过重验后，执行者执行本 Skill 后续的分支、提交、rebase、merge 和报告收集。
    主 Agent 最后独立核验结果并向用户交付。
 
-写入阶段成功后，执行者必须返回组装最终统一回执所需的全部已核验事实：提交哈希、完整
-实际提交信息、提交后校验是否实际执行、分支、工作树、push 状态和统计；集成另返回源/目标、
-rebase、merge、worktree 与范围事实。不得只返回短哈希、subject 或一行成功摘要；主 Agent
-负责独立核验并完整呈现。
+写入阶段成功后，执行者必须返回以下已核验结果：提交哈希、完整实际提交信息、提交后校验
+是否实际执行、分支、工作树、push 状态、统计，以及源/目标、rebase、merge、worktree 和
+集成范围。不得只返回短哈希、subject 或一行成功摘要；主 Agent 负责独立核验并完整呈现。
 
 执行者仅在明确的集成授权中可创建源分支、临时 worktree、commit、
 rebase 或 merge；始终不得 fetch、pull、push、reset、强制移动 ref、stash、clean 或递归
@@ -107,7 +105,7 @@ rebase 或 merge；始终不得 fetch、pull、push、reset、强制移动 ref�
   权限重试和清理都遵循该 Skill。
 - 不创建临时源分支，不运行 `git rebase` 或 `git merge`，不查找目标 worktree，
   不创建临时目标 worktree，也不 fetch、pull 或 push。
-- 最终普通 assistant 回复使用 `git-commit` 的完整 **Post-Commit Report**，并先提供
+- 面向用户的最终回复使用 `git-commit` 的完整 **Post-Commit Report**，并先提供
   本 Skill 的“集成结果”字段；直接提交时 `Rebase`、`Merge` 和 `Push` 均明确为未执行。
   不得以提交标题、短哈希或工具输出替代完整回执。
 
@@ -115,8 +113,8 @@ rebase 或 merge；始终不得 fetch、pull、push、reset、强制移动 ref�
 
 - 对已暂存的源变更，执行者在同一 Agent 内使用 `git-commit` 机制。保持
   staged-only 范围；空索引时停止并要求用户精确暂存文件。提交信息起草、提交执行、
-  权限重试和清理由该 Skill 负责。在普通 rebase/merge 模式下延后其最终报告，待集成事实
-  完成后组合输出；字段、统计表和实际提交信息仍以 `git-commit` 的
+  权限重试和清理由该 Skill 负责。在普通 rebase/merge 模式下，待 rebase 和 merge 完成后
+  合并输出提交回执与集成结果；字段、统计表和实际提交信息仍以 `git-commit` 的
   **Post-Commit Report** 为唯一权威来源。
 - 提交步骤前记录源 `HEAD`。只有提交步骤改变 `HEAD` 时，才将源结果分类为
   `created-this-run`；否则，如果源已经提交且干净，则分类为
@@ -176,7 +174,7 @@ rebase 或 merge；始终不得 fetch、pull、push、reset、强制移动 ref�
   `<target-branch>` 且保持干净。
 - 不要仅为进入 `<target-branch>` 而切换用户主 checkout。
 - 不要使用 `git update-ref`、`git branch -f` 或其他绕过 worktree 的底层 ref 命令
-  更新目标分支。使用真实目标 worktree，让 Git 将分支、索引和文件保持在可理解状态。
+  更新目标分支。通过目标 worktree 执行合并，确保目标分支、索引和工作树同步更新。
 - 使用默认 Git 行为运行 `git merge <source-branch>`。除非用户明确要求，否则不要强制
   `--no-ff`、squash、再次 rebase 或 push。
 - 出现 merge 冲突时，使用与 rebase 相同的机械冲突规则，然后只暂存已解决文件并运行
@@ -184,7 +182,7 @@ rebase 或 merge；始终不得 fetch、pull、push、reset、强制移动 ref�
   报告其路径供后续解决，不要删除。
 - 在临时目标 worktree 中成功合并后，使用
   `git worktree remove <temporary-path>` 将其删除。
-- 最终普通 assistant 回复先输出“集成结果”，至少包含源分支、目标分支、目标 checkout、
+- 面向用户的最终回复先输出“集成结果”，至少包含源分支、目标分支、目标 checkout、
   源提交数、集成模式（`existing-target-worktree` 或 `temporary-target-worktree`）、Rebase、
   Merge、临时 worktree 路径与清理结果（如适用）、源/目标工作树最终状态和 Push。对于已
   挂接的 checkout，还要包含原始 detached commit 及源分支是创建还是复用。
@@ -192,7 +190,7 @@ rebase 或 merge；始终不得 fetch、pull、push、reset、强制移动 ref�
   Report**，包括 Markdown 统计表和完整实际提交信息。对 `created-this-run` 使用
   `已创建提交`；对 `preexisting-source-commit` 使用
   `本次未创建新提交；合并的是源分支已有提交`，并将提交后校验如实写为
-  `未执行（本次复用已有提交）`。这两个动作值不得减少其他字段。
+  `未执行（本次复用已有提交）`。
 - 集成包含多个源提交时，在“集成结果”后以 Markdown 表格列出每个完整哈希和 subject，
   再使用统计脚本的 `--range <target-commit>...<source-commit>` 输出 `git-commit` 定义的
   Markdown 统计表。多提交范围没有单一实际提交信息；不得将任一提交 message 伪装为整个

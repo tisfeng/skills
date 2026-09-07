@@ -1,7 +1,7 @@
 # 完整提交回执示例
 
-仅在需要组织最终用户可见回复时阅读。替换所有示例事实；`SKILL.md` 的
-Post-Commit Report 规则和 Git 的实际输出优先。
+需要参考完整提交回复时阅读。将示例中的哈希、分支、状态、统计和提交信息替换为本次实际
+结果；`SKILL.md` 的 Post-Commit Report 规则和 Git 的实际输出优先。
 
 ````markdown
 本地 Git 提交完成。

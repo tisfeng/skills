@@ -173,8 +173,8 @@ python3 "<git-commit-skill-dir>/scripts/commit-change-stats.py" <full-commit-has
 报告前，文件数、新增行、删除行和净变动的总计都必须等于 `code` 与 `docs` 之和。
 脚本失败或结果不一致都视为报告失败，不得编造统计数据。
 
-该脚本的 JSON 是权威数据接口，不是直接面向用户的展示格式。最终普通 assistant 回复必须
-根据其中的数字渲染本 Skill 定义的 Markdown 表格；不要修改脚本默认输出为 Markdown。
+统计数字以脚本输出的 JSON 为准。在面向用户的最终回复中，按本 Skill 定义的 Markdown
+表格展示；不要修改脚本默认输出为 Markdown。
 
 对于多提交集成范围，调用方工作流可以改为运行：
 
@@ -193,9 +193,9 @@ python3 "<git-commit-skill-dir>/scripts/commit-change-stats.py" \
 - `git status --short`：最终工作树状态。
 - **变动统计**：已提交文本变更的统计结果。
 
-以下是用户可见、不可省略的完整交付回执。它必须作为最终普通 assistant 回复出现；终端输出、
+以下是用户可见、不可省略的完整交付回执。它必须出现在面向用户的最终回复中；终端输出、
 工具输出、子 Agent 返回、短哈希、`hash + subject` 或仅有一行总结均不能替代该回执。
-调用方只能在本节规定的前后补充自己的事实，不能删除或压缩任何适用字段。
+调用方可在回执前后补充本次工作流的结果，但适用字段必须完整保留。
 
 中文任务使用以下结构。英文任务翻译其中标签，但保留相同字段和顺序。
 
@@ -225,7 +225,7 @@ python3 "<git-commit-skill-dir>/scripts/commit-change-stats.py" \
 ````
 
 正净变动使用 `+N`，负值使用 `-N`，零值使用 `0（无变化）`。英文任务翻译表头和零值
-说明，但保留相同字段、行顺序和数字。除代码围栏外，围栏内的提交信息必须与 Git 完全一致。
+说明，但保留相同字段、行顺序和数字。代码块中的提交信息必须与 Git 中保存的信息完全一致。
 本次创建提交且提交后校验实际通过时使用 `通过`；复用已有提交而本次未运行提交后校验时使用
 `未执行（本次复用已有提交）`。不得把只读 message 检查写成提交后一致性校验。
 
@@ -286,5 +286,5 @@ python3 "<git-commit-skill-dir>/scripts/commit-change-stats.py" \
 冲突处理和状态验证。
 
 需要了解最终用户可见的完整交付格式时，读取
-[完整提交回执示例](references/post-commit-report-example.md)。示例不替代本节的字段、统计和
-提交信息一致性规则。
+[完整提交回执示例](references/post-commit-report-example.md)。回执字段、统计格式和提交
+信息一致性要求以 **Post-Commit Report** 为准。
