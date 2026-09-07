@@ -26,7 +26,13 @@ to push, merge, comment, or perform other remote writes merely by being invoked.
 This is a private repository. Make sure Git, GitHub CLI, or SSH can access
 `git@github.com:tisfeng/skills.git` before installing.
 
-List the available skills:
+Use the latest stable release (recommended):
+
+```bash
+npx skills add 'tisfeng/skills#v0.1.0' --list
+```
+
+Follow the latest changes on `main`:
 
 ```bash
 npx skills add tisfeng/skills --list
@@ -35,13 +41,13 @@ npx skills add tisfeng/skills --list
 Install every skill globally for Codex:
 
 ```bash
-npx skills add tisfeng/skills --skill '*' --global --agent codex --yes
+npx skills add 'tisfeng/skills#v0.1.0' --skill '*' --global --agent codex --yes
 ```
 
 Install the pull-request review pair for the current project:
 
 ```bash
-npx skills add tisfeng/skills \
+npx skills add 'tisfeng/skills#v0.1.0' \
   --skill review \
   --skill review-pr \
   --agent codex \
@@ -51,7 +57,7 @@ npx skills add tisfeng/skills \
 Install the worktree delivery pair for the current project:
 
 ```bash
-npx skills add tisfeng/skills \
+npx skills add 'tisfeng/skills#v0.1.0' \
   --skill git-commit \
   --skill worktree-rebase-merge \
   --agent codex \
@@ -61,6 +67,9 @@ npx skills add tisfeng/skills \
 The default installation scope is the current project. `--global` installs skills in the selected
 agent's user directory. Codex uses `.agents/skills/` for project installations and
 `~/.codex/skills/` for global installations.
+
+Project-scoped installations write a `skills-lock.json` file. Commit this file to version control to
+preserve the selected source ref and content hashes across the team.
 
 ## Updating
 
@@ -75,6 +84,9 @@ Update globally installed skills:
 ```bash
 npx skills update --global
 ```
+
+Updates keep the source ref selected during installation. A release-pinned installation remains on
+that release; rerun `skills add` with a newer tag when you want to upgrade versions.
 
 ## Development and Validation
 
