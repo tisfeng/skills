@@ -1,0 +1,38 @@
+name: Validate Skills
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate skill structure
+        run: python3 scripts/validate-skills.py
+
+      - name: Compile Python files
+        run: python3 -m compileall -q skills scripts
+
+      - name: Test git-commit
+        run: python3 -m unittest discover -s skills/git-commit/tests -p 'test_*.py'
+
+      - name: Test review-pr
+        run: python3 -m unittest discover -s skills/review-pr/tests -p 'test_*.py'
+
+      - name: Test submit-pr
+        run: python3 -m unittest discover -s skills/submit-pr/tests -p 'test_*.py'
+
+      - name: Check shell syntax
+        run: bash -n skills/review-pr/scripts/prepare-pr-branch.sh
