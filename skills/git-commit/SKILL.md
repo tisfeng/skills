@@ -173,6 +173,9 @@ python3 "<git-commit-skill-dir>/scripts/commit-change-stats.py" <full-commit-has
 报告前，文件数、新增行、删除行和净变动的总计都必须等于 `code` 与 `docs` 之和。
 脚本失败或结果不一致都视为报告失败，不得编造统计数据。
 
+该脚本的 JSON 是权威数据接口，不是直接面向用户的展示格式。最终普通 assistant 回复必须
+根据其中的数字渲染本 Skill 定义的 Markdown 表格；不要修改脚本默认输出为 Markdown。
+
 对于多提交集成范围，调用方工作流可以改为运行：
 
 ```bash
@@ -190,6 +193,10 @@ python3 "<git-commit-skill-dir>/scripts/commit-change-stats.py" \
 - `git status --short`：最终工作树状态。
 - **变动统计**：已提交文本变更的统计结果。
 
+以下是用户可见、不可省略的完整交付回执。它必须作为最终普通 assistant 回复出现；终端输出、
+工具输出、子 Agent 返回、短哈希、`hash + subject` 或仅有一行总结均不能替代该回执。
+调用方只能在本节规定的前后补充自己的事实，不能删除或压缩任何适用字段。
+
 中文任务使用以下结构。英文任务翻译其中标签，但保留相同字段和顺序。
 
 ````markdown
@@ -198,14 +205,17 @@ python3 "<git-commit-skill-dir>/scripts/commit-change-stats.py" \
 - 动作：已创建提交
 - Commit：`<full-hash>`
 - 分支：`<branch>`
+- 提交后校验：`<validation-status>`
 - 工作树：`干净` or `保留未提交变更`
 - Push：未执行
 
 变动统计
 
-- 总变动：<files> 个文件，新增 <insertions> 行，删除 <deletions> 行，净增加/减少 <net> 行
-- 代码变动：<files> 个文件，新增 <insertions> 行，删除 <deletions> 行，净增加/减少 <net> 行
-- 文档变动：<files> 个文件，新增 <insertions> 行，删除 <deletions> 行，净增加/减少 <net> 行
+| 类别 | 文件数 | 新增行 | 删除行 | 净变动 |
+| --- | ---: | ---: | ---: | ---: |
+| 总计 | <files> | <insertions> | <deletions> | <signed-net> |
+| 代码 | <files> | <insertions> | <deletions> | <signed-net> |
+| 文档 | <files> | <insertions> | <deletions> | <signed-net> |
 
 实际提交信息
 
@@ -214,12 +224,59 @@ python3 "<git-commit-skill-dir>/scripts/commit-change-stats.py" \
 ```
 ````
 
-净变动为零时使用 `无变化`。不得用短哈希和标题取代完整报告。除代码围栏外，围栏内的
-提交信息必须与 Git 完全一致。
+正净变动使用 `+N`，负值使用 `-N`，零值使用 `0（无变化）`。英文任务翻译表头和零值
+说明，但保留相同字段、行顺序和数字。除代码围栏外，围栏内的提交信息必须与 Git 完全一致。
+本次创建提交且提交后校验实际通过时使用 `通过`；复用已有提交而本次未运行提交后校验时使用
+`未执行（本次复用已有提交）`。不得把只读 message 检查写成提交后一致性校验。
 
-调用方工作流复用已有提交时，只能修改动作行以说明本次运行没有创建提交。仍须保留完整
-哈希、统计、实际提交信息、最终状态和 push 状态。在收集命令中使用被复用的哈希而不是
-`HEAD`。
+调用方工作流复用已有提交时，可以修改动作行和提交后校验状态以如实说明本次没有创建或
+校验提交；仍须保留完整哈希、统计、实际提交信息、最终状态和 push 状态。在收集命令中
+使用被复用的哈希而不是 `HEAD`。
+
+### 完整普通提交回执示例
+
+````markdown
+本地 Git 提交完成。
+
+提交结果
+
+- 动作：已创建提交
+- Commit：`0123456789abcdef0123456789abcdef01234567`
+- 分支：`docs/unify-git-delivery-receipts`
+- 提交后校验：通过
+- 工作树：干净
+- Push：未执行
+
+变动统计
+
+| 类别 | 文件数 | 新增行 | 删除行 | 净变动 |
+| --- | ---: | ---: | ---: | ---: |
+| 总计 | 5 | 68 | 15 | +53 |
+| 代码 | 1 | 8 | 2 | +6 |
+| 文档 | 4 | 60 | 13 | +47 |
+
+实际提交信息
+
+```text
+docs(git): 统一本地 Git 交付回执
+
+现有提交流程收集了完整结果，但最终回执格式分散，可能被压缩成提交标题。
+
+统一用户可见回执并使用 Markdown 表格展示统计，保留提交信息校验和 JSON 统计数据来源。
+
+这让本地提交提供一致、可核验的结果，并继续保持默认不推送的边界。
+
+----------------------------------------------------------------------
+
+docs(git): unify local Git delivery receipts
+
+The existing commit workflow collected complete results, but its final receipt could be reduced to a commit subject.
+
+Unify the user-visible receipt and render statistics as a Markdown table while preserving message validation and the JSON statistics source.
+
+This gives local commits consistent, verifiable results while preserving the default no-push boundary.
+```
+````
 
 ## 执行规则
 

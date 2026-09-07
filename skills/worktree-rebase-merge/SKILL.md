@@ -28,6 +28,11 @@ description: 完成 worktree 变更：必要时为 detached checkout 创建 Conv
 4. 通过重验后，`git_delivery` 执行本 Skill 后续的分支、提交、rebase、merge 和报告收集。
    主 Agent 最后独立核验结果并向用户交付。
 
+`apply` 成功后，实际执行者必须返回组装最终统一回执所需的全部已核验事实：提交哈希、
+完整实际提交信息、提交后校验是否实际执行、分支、工作树、push 状态和统计；integration
+另返回源/目标、rebase、merge、worktree 与范围事实。不得只返回短哈希、subject 或一行
+成功摘要；主 Agent 负责独立核验并完整呈现。
+
 `git_delivery` 仅在明确的 `integration` 授权中可创建源分支、临时 worktree、commit、
 rebase 或 merge；始终不得 fetch、pull、push、reset、强制移动 ref、stash、clean 或递归
 委派。只有完全位于允许路径且不需产品语义判断的机械冲突可以处理，其他冲突必须保留
@@ -103,15 +108,17 @@ rebase 或 merge；始终不得 fetch、pull、push、reset、强制移动 ref�
   权限重试和清理都遵循该 Skill。
 - 不创建临时源分支，不运行 `git rebase` 或 `git merge`，不查找目标 worktree，
   不创建临时目标 worktree，也不 fetch、pull 或 push。
-- 提交步骤后使用 `git-commit` 的 **Post-Commit Report**，并说明没有执行 rebase、
-  merge 或 push。
+- 最终普通 assistant 回复使用 `git-commit` 的完整 **Post-Commit Report**，并先提供
+  本 Skill 的“集成结果”字段；直接提交时 `Rebase`、`Merge` 和 `Push` 均明确为未执行。
+  不得以提交标题、短哈希或工具输出替代完整回执。
 
 ## 提交源分支
 
 - 对已暂存的源变更，`git_delivery` 在同一 Agent 内使用 `git-commit` 机制。保持
   staged-only 范围；空索引时停止并要求用户精确暂存文件。提交信息起草、提交执行、
-  权限重试和清理由该 Skill 负责。在普通 rebase/merge 模式下，本工作流覆盖
-  `git-commit` 默认模式的报告顺序；在直接提交模式下遵循 `git-commit` 报告。
+  权限重试和清理由该 Skill 负责。在普通 rebase/merge 模式下延后其最终报告，待集成事实
+  完成后组合输出；字段、统计表和实际提交信息仍以 `git-commit` 的
+  **Post-Commit Report** 为唯一权威来源。
 - 提交步骤前记录源 `HEAD`。只有提交步骤改变 `HEAD` 时，才将源结果分类为
   `created-this-run`；否则，如果源已经提交且干净，则分类为
   `preexisting-source-commit`。
@@ -178,13 +185,77 @@ rebase 或 merge；始终不得 fetch、pull、push、reset、强制移动 ref�
   报告其路径供后续解决，不要删除。
 - 在临时目标 worktree 中成功合并后，使用
   `git worktree remove <temporary-path>` 将其删除。
-- 报告源分支、目标分支、目标 checkout 路径、源提交数量、目标合并模式
-  （`existing-target-worktree` 或 `temporary-target-worktree`）、创建临时目标
-  worktree 时的路径、合并结果和最终干净状态。对于已挂接的 checkout，还要报告原始
-  detached commit，以及源分支是创建还是复用。除非用户要求 push，否则说明未执行。
-- 如果集成恰好包含一个源提交，以该提交的 `git-commit` **Post-Commit Report** 收尾。
-  对 `created-this-run` 使用 `已创建提交`；对 `preexisting-source-commit` 使用
-  `本次未创建新提交；合并的是源分支已有提交`。
-- 如果集成包含多个源提交，列出每个完整哈希和 subject，再使用统计脚本的
-  `--range <target-commit>...<source-commit>` 报告总计、代码和文档文本变动。不要将
-  某一条提交信息当作整个范围的提交信息。
+- 最终普通 assistant 回复先输出“集成结果”，至少包含源分支、目标分支、目标 checkout、
+  源提交数、集成模式（`existing-target-worktree` 或 `temporary-target-worktree`）、Rebase、
+  Merge、临时 worktree 路径与清理结果（如适用）、源/目标工作树最终状态和 Push。对于已
+  挂接的 checkout，还要包含原始 detached commit 及源分支是创建还是复用。
+- 集成恰好包含一个源提交时，在“集成结果”后完整附加 `git-commit` 的 **Post-Commit
+  Report**，包括 Markdown 统计表和完整实际提交信息。对 `created-this-run` 使用
+  `已创建提交`；对 `preexisting-source-commit` 使用
+  `本次未创建新提交；合并的是源分支已有提交`，并将提交后校验如实写为
+  `未执行（本次复用已有提交）`。这两个动作值不得减少其他字段。
+- 集成包含多个源提交时，在“集成结果”后以 Markdown 表格列出每个完整哈希和 subject，
+  再使用统计脚本的 `--range <target-commit>...<source-commit>` 输出 `git-commit` 定义的
+  Markdown 统计表。多提交范围没有单一实际提交信息；不得将任一提交 message 伪装为整个
+  范围的 message，也不得因而省略完整提交清单或统计表。
+- `git-commit` 是提交结果、统计表和单提交实际 message 的唯一模板来源；本 Skill 只补充
+  集成事实，不复制或另行定义第二套通用提交回执。主 Agent 独立核验后仍必须完整呈现上述
+  回执，不得压缩 `git_delivery` 的结果。
+
+### 完整单提交集成回执示例
+
+````markdown
+本地 Git 交付完成。
+
+集成结果
+
+- 源分支：`docs/unify-git-delivery-receipts`
+- 目标分支：`main`
+- 目标 checkout：`<target-worktree-path>`
+- 源提交数：1
+- 集成模式：`existing-target-worktree`
+- Rebase：成功
+- Merge：Fast-forward
+- 源工作树：干净
+- 目标工作树：干净
+- Push：未执行
+
+提交结果
+
+- 动作：已创建提交
+- Commit：`0123456789abcdef0123456789abcdef01234567`
+- 分支：`docs/unify-git-delivery-receipts`
+- 提交后校验：通过
+- 工作树：干净
+- Push：未执行
+
+变动统计
+
+| 类别 | 文件数 | 新增行 | 删除行 | 净变动 |
+| --- | ---: | ---: | ---: | ---: |
+| 总计 | 5 | 68 | 15 | +53 |
+| 代码 | 1 | 8 | 2 | +6 |
+| 文档 | 4 | 60 | 13 | +47 |
+
+实际提交信息
+
+```text
+docs(git): 统一本地 Git 交付回执
+
+现有提交和集成流程可能只显示提交标题，无法提供完整的可核验交付事实。
+
+统一提交回执并让集成流程补充 rebase 和 merge 结果，同时使用 Markdown 表格展示统计。
+
+这让普通提交和本地集成都提供一致结果，并继续保持默认不推送的边界。
+
+----------------------------------------------------------------------
+
+docs(git): unify local Git delivery receipts
+
+The commit and integration flows could show only a commit subject, leaving the delivery facts incomplete.
+
+Unify the commit receipt, add rebase and merge facts for integrations, and render statistics as a Markdown table.
+
+This gives local commits and integrations consistent results while preserving the default no-push boundary.
+```
+````
