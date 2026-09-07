@@ -233,51 +233,6 @@ python3 "<git-commit-skill-dir>/scripts/commit-change-stats.py" \
 校验提交；仍须保留完整哈希、统计、实际提交信息、最终状态和 push 状态。在收集命令中
 使用被复用的哈希而不是 `HEAD`。
 
-### 完整普通提交回执示例
-
-````markdown
-本地 Git 提交完成。
-
-提交结果
-
-- 动作：已创建提交
-- Commit：`0123456789abcdef0123456789abcdef01234567`
-- 分支：`docs/unify-git-delivery-receipts`
-- 提交后校验：通过
-- 工作树：干净
-- Push：未执行
-
-变动统计
-
-| 类别 | 文件数 | 新增行 | 删除行 | 净变动 |
-| --- | ---: | ---: | ---: | ---: |
-| 总计 | 5 | 68 | 15 | +53 |
-| 代码 | 1 | 8 | 2 | +6 |
-| 文档 | 4 | 60 | 13 | +47 |
-
-实际提交信息
-
-```text
-docs(git): 统一本地 Git 交付回执
-
-现有提交流程收集了完整结果，但最终回执格式分散，可能被压缩成提交标题。
-
-统一用户可见回执并使用 Markdown 表格展示统计，保留提交信息校验和 JSON 统计数据来源。
-
-这让本地提交提供一致、可核验的结果，并继续保持默认不推送的边界。
-
-----------------------------------------------------------------------
-
-docs(git): unify local Git delivery receipts
-
-The existing commit workflow collected complete results, but its final receipt could be reduced to a commit subject.
-
-Unify the user-visible receipt and render statistics as a Markdown table while preserving message validation and the JSON statistics source.
-
-This gives local commits consistent, verifiable results while preserving the default no-push boundary.
-```
-````
-
 ## 执行规则
 
 - 不运行 `git push`。
@@ -330,43 +285,6 @@ This gives local commits consistent, verifiable results while preserving the def
 本指南只推导名称，不授权暂存、提交或创建分支。调用方工作流负责这些 Git 操作、名称
 冲突处理和状态验证。
 
-## 示例
-
-仅英文提交信息：
-
-```text
-fix(ui): defer rendering until view appears
-
-UI rendering started before its container was ready, creating a startup race. When layout was still settling, early rendering could trigger conflicts or produce blank content.
-
-Move rendering out of the initializer. Start it after the view appears and layout is ready so the UI observes stable state.
-
-This restores stable UI startup and reduces layout timing risk without changing the user-facing flow.
-```
-
-非英文双语提交信息。按以下顺序将这些区块和分隔线写入 `commit_message.txt`，不要包含
-Markdown 代码围栏：
-
-```text
-fix(ui): 推迟渲染直到视图出现后再执行
-
-界面容器尚未准备就绪时就开始渲染，导致启动阶段出现竞态。布局仍在变化时，过早渲染可能触发冲突或出现空白内容。
-
-将渲染操作从初始化流程中移出，改为在视图出现且布局就绪后再开始，让界面读取稳定状态。
-
-此修改恢复了稳定的界面启动流程，降低布局时序风险，并且不改变用户可见流程。
-```
-
-```text
-----------------------------------------------------------------------
-```
-
-```text
-fix(ui): defer rendering until view appears
-
-UI rendering started before its container was ready, creating a startup race. When layout was still settling, early rendering could trigger conflicts or produce blank content.
-
-Move rendering out of the initializer. Start it after the view appears and layout is ready so the UI observes stable state.
-
-This restores stable UI startup and reduces layout timing risk without changing the user-facing flow.
-```
+需要了解最终用户可见的完整交付格式时，读取
+[完整提交回执示例](references/post-commit-report-example.md)。示例不替代本节的字段、统计和
+提交信息一致性规则。
