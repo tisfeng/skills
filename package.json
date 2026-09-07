@@ -1,0 +1,22 @@
+{
+  "name": "@tisfeng/codex-agents",
+  "version": "0.1.0",
+  "description": "Install versioned Codex custom-agent configurations from Git sources.",
+  "type": "module",
+  "bin": {
+    "codex-agents": "bin/codex-agents.mjs"
+  },
+  "scripts": {
+    "test:agents": "node --test tests/agents-installer.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "license": "MIT"
+}

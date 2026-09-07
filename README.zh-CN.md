@@ -20,6 +20,21 @@
 项目自己的 `AGENTS.md`、构建配置、验证规则和用户明确要求始终优先。各 skill 仅在当前
 请求和自身工作流授权时执行 push、merge、评论或其他远程操作。
 
+## Codex 子代理
+
+本仓库还发布四个可版本化的 Codex 自定义子代理：`planner`、`reviewer`、`tester` 和
+`git-delivery`。它们是 TOML 角色而非 Skill，因此使用独立的安装器与 lock 文件。项目级、
+全局级、更新与本地定制保护见[子代理安装说明](docs/agent-installation.md)。
+
+配套 npm 包发布后，可将全部子代理安装到当前项目：
+
+```bash
+npx @tisfeng/codex-agents add 'tisfeng/skills#v0.2.0' --agent '*'
+```
+
+加入 `--global` 可安装到 `~/.codex/agents/`。发布前，贡献者可直接运行仓库 CLI：
+`node bin/codex-agents.mjs add . --list`。
+
 ## 安装
 
 将全部技能安装到 Codex 全局目录：
@@ -67,6 +82,8 @@ python3 -m unittest discover -s skills/git-commit/tests -p 'test_*.py'
 python3 -m unittest discover -s skills/review-pr/tests -p 'test_*.py'
 python3 -m unittest discover -s skills/submit-pr/tests -p 'test_*.py'
 bash -n skills/review-pr/scripts/prepare-pr-branch.sh
+python3 scripts/validate-agents.py
+node --test tests/agents-installer.test.mjs
 ```
 
 仓库的 GitHub Actions 会运行相同的结构、语法和单元测试检查。

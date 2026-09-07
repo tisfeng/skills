@@ -21,6 +21,22 @@ A project's own `AGENTS.md`, build configuration, validation rules, and explicit
 always take precedence. Each skill performs remote actions only when the current request and its
 workflow authorize them.
 
+## Codex Agents
+
+This repository also publishes four versioned Codex custom-agent configurations:
+`planner`, `reviewer`, `tester`, and `git-delivery`. They are TOML roles rather than Skills, so they
+use a separate installer and lock file. See [agent installation](docs/agent-installation.md) for the
+project/global locations, update behavior, and local-customization protection.
+
+After the companion npm package is published, install every agent for the current project with:
+
+```bash
+npx @tisfeng/codex-agents add 'tisfeng/skills#v0.2.0' --agent '*'
+```
+
+Use `--global` to install into `~/.codex/agents/`. Until publication, contributors can run the
+repository CLI directly: `node bin/codex-agents.mjs add . --list`.
+
 ## Installation
 
 Install every skill globally for Codex:
@@ -70,6 +86,8 @@ python3 -m unittest discover -s skills/git-commit/tests -p 'test_*.py'
 python3 -m unittest discover -s skills/review-pr/tests -p 'test_*.py'
 python3 -m unittest discover -s skills/submit-pr/tests -p 'test_*.py'
 bash -n skills/review-pr/scripts/prepare-pr-branch.sh
+python3 scripts/validate-agents.py
+node --test tests/agents-installer.test.mjs
 ```
 
 GitHub Actions runs the same structural, syntax, and unit-test checks.
