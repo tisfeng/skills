@@ -6,6 +6,7 @@ from __future__ import annotations
 import re
 import sys
 from pathlib import Path
+from typing import Sequence
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -15,6 +16,22 @@ NAME_PATTERN = re.compile(r"^name:\s*([^\n]+)$", re.MULTILINE)
 DESCRIPTION_PATTERN = re.compile(r"^description:\s*(?:\S|[>|])", re.MULTILINE)
 MARKDOWN_LINK_PATTERN = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 CONFLICT_MARKER_PATTERN = re.compile(r"^(?:<<<<<<<|=======|>>>>>>>)", re.MULTILINE)
+CATALOG_ROW_PATTERN = re.compile(r"^\|\s*`(?P<name>[a-z0-9-]+)`\s*\|", re.MULTILINE)
+
+
+def validate_markdown_links(markdown_file: Path) -> list[str]:
+    errors: list[str] = []
+    markdown = markdown_file.read_text(encoding="utf-8")
+    for target in MARKDOWN_LINK_PATTERN.findall(markdown):
+        target = target.strip().split("#", 1)[0]
+        if not target or "://" in target or target.startswith(("mailto:", "#", "<")):
+            continue
+        resolved = (markdown_file.parent / target).resolve()
+        if not resolved.exists():
+            errors.append(
+                f"{markdown_file.relative_to(REPOSITORY_ROOT)}: broken link {target}"
+            )
+    return errors
 
 
 def validate_skill(skill_directory: Path) -> list[str]:
@@ -42,16 +59,7 @@ def validate_skill(skill_directory: Path) -> list[str]:
         errors.append(f"{entrypoint.relative_to(REPOSITORY_ROOT)}: missing description")
 
     for markdown_file in skill_directory.rglob("*.md"):
-        markdown = markdown_file.read_text(encoding="utf-8")
-        for target in MARKDOWN_LINK_PATTERN.findall(markdown):
-            target = target.strip().split("#", 1)[0]
-            if not target or "://" in target or target.startswith(("mailto:", "#", "<")):
-                continue
-            resolved = (markdown_file.parent / target).resolve()
-            if not resolved.exists():
-                errors.append(
-                    f"{markdown_file.relative_to(REPOSITORY_ROOT)}: broken link {target}"
-                )
+        errors.extend(validate_markdown_links(markdown_file))
 
     return errors
 
@@ -70,6 +78,25 @@ def validate_conflict_markers() -> list[str]:
     return errors
 
 
+def validate_readme_catalog(skill_directories: Sequence[Path]) -> list[str]:
+    errors: list[str] = []
+    expected_names = {directory.name for directory in skill_directories}
+    for filename in ("README.md", "README.zh-CN.md"):
+        readme = REPOSITORY_ROOT / filename
+        if not readme.is_file():
+            errors.append(f"{filename}: missing README")
+            continue
+        errors.extend(validate_markdown_links(readme))
+        documented_names = set(CATALOG_ROW_PATTERN.findall(readme.read_text(encoding="utf-8")))
+        missing = sorted(expected_names - documented_names)
+        unknown = sorted(documented_names - expected_names)
+        if missing:
+            errors.append(f"{filename}: missing skills in catalog: {', '.join(missing)}")
+        if unknown:
+            errors.append(f"{filename}: unknown skills in catalog: {', '.join(unknown)}")
+    return errors
+
+
 def main() -> int:
     if not SKILLS_ROOT.is_dir():
         print("skills directory is missing", file=sys.stderr)
@@ -84,6 +111,7 @@ def main() -> int:
         names.add(skill_directory.name)
         errors.extend(validate_skill(skill_directory))
 
+    errors.extend(validate_readme_catalog(skill_directories))
     errors.extend(validate_conflict_markers())
     if errors:
         for error in errors:

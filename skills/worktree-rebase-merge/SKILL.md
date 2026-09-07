@@ -6,34 +6,33 @@ description: 完成 worktree 变更：必要时为 detached checkout 创建 Conv
 # Worktree Rebase/Merge 工作流
 
 提交源分支，将其 rebase 到目标分支，再在目标分支的 worktree 中合并。源、目标相同
-时只提交，不执行 rebase 或 merge。Git 写操作由 `git_delivery` 在同一 Agent 内遵循
-`git-commit` Skill 处理，不递归委派。
+时只提交，不执行 rebase 或 merge。Git 写操作由一个实际执行者遵循 `git-commit` Skill
+处理，不递归委派。
 
-## 委派执行协议
+## 执行协议
 
-此 Skill 不在 frontmatter 绑定模型。主 Agent 在确认 `integration` 授权、允许路径、
-初始 Git 快照和用户限制后，串行委派可用的 `git_delivery` Agent。当前仓库提供
-`.codex/agents/git-delivery.toml` 时使用该配置；没有项目级配置或可用执行 Agent 时，
-由主 Agent 按相同的 `prepare`、`apply`、重验和报告协议执行。下文的 `git_delivery`
-统一指实际执行者。
+主 Agent 在确认集成授权、允许路径、初始 Git 快照和用户限制后，选择一个实际执行者。
+执行者可以是主 Agent，也可以是串行委派的可用 Agent；没有项目级配置或可用执行 Agent 时，
+主 Agent 按相同的预检、重验、执行和报告协议完成工作。下文的“执行者”统一指实际执行
+Git 写操作的 Agent。
 
-1. `prepare` 阶段只读：`git_delivery` 解析目标、检查源/目标 worktree、识别是否需要
+1. 预检阶段只读：执行者解析目标、检查源/目标 worktree、识别是否需要
    新提交，并返回预检证据和完整提交信息草稿。不得创建分支、临时 worktree、暂存或写入
    `commit_message.txt`。
 2. 若需要新提交，主 Agent 必须在主对话中原样显示 `提交信息预览` 和完整草稿。默认模式
    显示后可继续；确认、仅预览或仅草稿模式必须等待用户。若源已提交且干净，返回
    `preexisting-source-commit`，无需提交信息预览。
-3. 主 Agent 向同一 `git_delivery` 发送 `apply` 后，该 Agent 重新检查 HEAD、索引、
-   源/目标 worktree 和范围。任何漂移都会使草稿失效并进入 protected，不得写入。
-4. 通过重验后，`git_delivery` 执行本 Skill 后续的分支、提交、rebase、merge 和报告收集。
+3. 进入写入阶段前，执行者重新检查 HEAD、索引、源/目标 worktree 和范围。任何漂移都会
+   使草稿失效，保留现场且不得写入。
+4. 通过重验后，执行者执行本 Skill 后续的分支、提交、rebase、merge 和报告收集。
    主 Agent 最后独立核验结果并向用户交付。
 
-`apply` 成功后，实际执行者必须返回组装最终统一回执所需的全部已核验事实：提交哈希、
-完整实际提交信息、提交后校验是否实际执行、分支、工作树、push 状态和统计；integration
-另返回源/目标、rebase、merge、worktree 与范围事实。不得只返回短哈希、subject 或一行
-成功摘要；主 Agent 负责独立核验并完整呈现。
+写入阶段成功后，执行者必须返回组装最终统一回执所需的全部已核验事实：提交哈希、完整
+实际提交信息、提交后校验是否实际执行、分支、工作树、push 状态和统计；集成另返回源/目标、
+rebase、merge、worktree 与范围事实。不得只返回短哈希、subject 或一行成功摘要；主 Agent
+负责独立核验并完整呈现。
 
-`git_delivery` 仅在明确的 `integration` 授权中可创建源分支、临时 worktree、commit、
+执行者仅在明确的集成授权中可创建源分支、临时 worktree、commit、
 rebase 或 merge；始终不得 fetch、pull、push、reset、强制移动 ref、stash、clean 或递归
 委派。只有完全位于允许路径且不需产品语义判断的机械冲突可以处理，其他冲突必须保留
 现场并返回主 Agent。
@@ -103,7 +102,7 @@ rebase 或 merge；始终不得 fetch、pull、push、reset、强制移动 ref�
 ## 目标分支直接提交
 
 - 仅当当前源分支与解析出的目标分支是同一分支时，使用直接提交模式。
-- 在直接提交模式下，`git_delivery` 在同一 Agent 内遵循 `git-commit` Skill：保持
+- 在直接提交模式下，执行者在同一 Agent 内遵循 `git-commit` Skill：保持
   staged-only 范围，空索引时停止并要求用户精确暂存文件；提交信息起草、提交执行、
   权限重试和清理都遵循该 Skill。
 - 不创建临时源分支，不运行 `git rebase` 或 `git merge`，不查找目标 worktree，
@@ -114,7 +113,7 @@ rebase 或 merge；始终不得 fetch、pull、push、reset、强制移动 ref�
 
 ## 提交源分支
 
-- 对已暂存的源变更，`git_delivery` 在同一 Agent 内使用 `git-commit` 机制。保持
+- 对已暂存的源变更，执行者在同一 Agent 内使用 `git-commit` 机制。保持
   staged-only 范围；空索引时停止并要求用户精确暂存文件。提交信息起草、提交执行、
   权限重试和清理由该 Skill 负责。在普通 rebase/merge 模式下延后其最终报告，待集成事实
   完成后组合输出；字段、统计表和实际提交信息仍以 `git-commit` 的
@@ -137,7 +136,7 @@ rebase 或 merge；始终不得 fetch、pull、push、reset、强制移动 ref�
 
 ## 脏目标暂停
 
-- 如果预检发现 `<target-branch>` 只有脏 worktree，则由 `git_delivery` 通过 `git-commit` 完成源提交并
+- 如果预检发现 `<target-branch>` 只有脏 worktree，则由执行者通过 `git-commit` 完成源提交并
   要求源 worktree 干净，然后在范围检查、rebase、merge 或 push 前停止。
 - 在该恢复路径中，绝不对脏目标 worktree 执行暂存、提交、stash、restore、clean 或
   其他修改。
@@ -200,4 +199,4 @@ rebase 或 merge；始终不得 fetch、pull、push、reset、强制移动 ref�
   范围的 message，也不得因而省略完整提交清单或统计表。
 - `git-commit` 是提交结果、统计表和单提交实际 message 的唯一模板来源；本 Skill 只补充
   集成事实，不复制或另行定义第二套通用提交回执。主 Agent 独立核验后仍必须完整呈现上述
-  回执，不得压缩 `git_delivery` 的结果。
+  回执，不得压缩执行者的结果。

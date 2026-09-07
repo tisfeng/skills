@@ -18,15 +18,12 @@ Agent 或项目路径中。
 
 - PR 标题使用 Angular-style：`type(scope): subject`。
 - 任务分支使用 Conventional 格式：`<type>/<kebab-case-summary>`。
-- PR 正文按以下顺序包含四个规范段落，每个仅出现一次：
-  1. `变更说明 / Summary`
-  2. `关联 Issue / Linked Issues`
-  3. `验证 / Verification`
-  4. `截图 / Screenshots`
-- 保留目标仓库 PR 模板中非占位的说明、checklist 和额外段落。
+- 目标仓库的 PR 模板优先：保留其标题、顺序、非占位说明、checklist 和额外段落。
+- 将 Summary、Issue、Verification 和 Screenshots 填入语义匹配的模板段落；模板缺少某一
+  段时，才追加该段的内置默认标题和内容。
 - 目标仓库没有 PR 模板时使用内置四段式骨架，不创建模板文件，也不中断流程。
-- 非 UI 修改的截图段填写 `N/A`；UI 修改只提示用户在 GitHub PR 页面补充截图，不能
-  因缺少截图中断流程。
+- 非 UI 修改的截图内容为 `N/A`；UI 修改只提示用户在 GitHub PR 页面补充截图，不能因
+  缺少截图中断流程。
 
 ## 模式
 

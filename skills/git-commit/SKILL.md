@@ -1,6 +1,6 @@
 ---
 name: git-commit
-description: 根据已暂存内容创建 Angular-style 提交，并为调用方工作流推导 Conventional 任务分支名。支持显式交付和受保护的 implementation 自动交付；为非英语用户生成双语提交信息，且不推送。
+description: 根据已暂存内容创建 Angular-style 提交，并为调用方工作流推导 Conventional 任务分支名。支持显式交付，以及在仓库规则明确授权时安全自动提交；为非英语用户生成双语提交信息，且不推送。
 ---
 
 # Git 提交流程
@@ -43,11 +43,11 @@ Agent 或项目路径中。
 9. 提交成功后遵循 **Post-Commit Report**。在向用户展示该报告之前，即使 Git 命令
    成功但提交后校验失败，也不算完成交付。
 
-## Implementation 自动交付
+## 经仓库规则授权的自动交付
 
-只有当仓库规则将任务分类为 `implementation` 且满足自动本地提交条件后，才调用此
-模式。这是收尾步骤，不是在每次编辑后执行。规划、讨论、分析以及仅修改计划或历史
-文档的任务不进入此模式。仓库规则允许时，Agent 文档 implementation 任务可以进入。
+只有仓库规则或调用方已明确授权自动本地提交时，才调用此模式。这是收尾步骤，不是在每次
+编辑后执行。规划、讨论、分析以及仅修改计划或历史文档的任务不进入此模式；是否包含 Agent
+文档由仓库规则决定。
 
 第一次写入前记录：
 
@@ -62,10 +62,10 @@ Agent 或项目路径中。
 
 符合自动交付条件时：
 
-1. 确认任务是 `implementation`，Mutation Gate 已通过，没有明确禁止自动提交的约束，
-   修改了产品代码、测试、构建配置、运行时资源或 Agent 文档，并且尚未执行自动提交。
+1. 确认任务属于仓库规则允许自动交付的类别，已有明确授权且没有禁止自动提交的约束，
+   修改了授权范围内的文件，并且尚未执行自动提交。
 2. 重新读取 `HEAD`、`git status --short` 和冲突状态；如果 `HEAD` 或初始状态发生变化，
-   立即跳过自动交付并进入 protected。
+   立即跳过自动交付并保留现场供手动交付。
 3. 只使用 `git add -- <paths>` 暂存 Agent 明确拥有的路径；此模式下绝不使用
    `git add .`。
 4. 重新读取 `git diff --cached --name-only` 和暂存区原始 patch，确认路径集合与
@@ -73,8 +73,8 @@ Agent 或项目路径中。
 5. 使用本 skill 的提交信息契约及提交前后校验流程，并执行一次本地 `git commit`。
 6. 遵循 **Post-Commit Report**。不要 push、pull、rebase、merge 或创建分支。
 
-如果无法安全分离路径归属，则保留变更供手动交付，并报告 protected 状态。提交失败时
-保留已暂存变更，并遵循现有提交失败规则。
+如果无法安全分离路径归属，则保留变更供手动交付并说明原因。提交失败时保留已暂存变更，
+并遵循现有提交失败规则。
 
 ## 提交信息契约
 
@@ -148,9 +148,9 @@ python3 "<git-commit-skill-dir>/scripts/validate-commit-message.py" \
   --mode "${COMMIT_MESSAGE_MODE}"
 ```
 
-提交后校验会读取 Git 中的实际消息并与预期文件比较。失败时进入 protected 状态：不要
-自动 amend，不要删除 `commit_message.txt`，不要声称交付完成；报告 commit hash 和具体
-错误，等待用户或调用方决定后续动作。
+提交后校验会读取 Git 中的实际消息并与预期文件比较。失败时停止自动处置：不要自动 amend，
+不要删除 `commit_message.txt`，不要声称交付完成；报告 commit hash 和具体错误，等待用户或
+调用方决定后续动作。
 
 ## 变动统计
 
