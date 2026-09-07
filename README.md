@@ -1,41 +1,44 @@
 # Skills
 
-一组适用于大多数软件项目的通用 Agent Skills。技能以 Git、GitHub 和代码维护工作流为
-主，支持通过 [`skills`](https://github.com/vercel-labs/skills) CLI 安装到 Codex 及其
-他兼容 Agent。
+English | [简体中文](README.zh-CN.md)
 
-## 技能目录
+A collection of general-purpose Agent Skills designed for most software projects. The skills
+focus on Git, GitHub, and code-maintenance workflows and can be installed for Codex and other
+compatible agents through the [`skills`](https://github.com/vercel-labs/skills) CLI.
 
-| Skill | 用途 | 配套 Skill |
+## Skill Catalog
+
+| Skill | Purpose | Companion Skill |
 | --- | --- | --- |
-| `code-simplifier` | 在保持行为不变的前提下简化近期代码改动 | 无 |
-| `git-commit` | 根据暂存区创建经过校验的 Angular-style 双语提交 | 无 |
-| `review` | 审查工作树、提交、提交范围、文件或模块 | 无 |
-| `review-pr` | 准备并审查 GitHub Pull Request，处理完整 review threads | `review` |
-| `submit-pr` | 规划、推送并创建或复用 GitHub Pull Request | 需要提交时使用 `git-commit` |
-| `worktree-rebase-merge` | 提交 worktree 变更，rebase 并安全合并到目标分支 | `git-commit` |
+| `code-simplifier` | Simplify recent code changes without altering behavior | None |
+| `git-commit` | Create validated Angular-style bilingual commits from staged changes | None |
+| `review` | Review a working tree, commit, commit range, file, or module | None |
+| `review-pr` | Prepare and review GitHub pull requests, including complete review threads | `review` |
+| `submit-pr` | Plan, push, and create or reuse GitHub pull requests | `git-commit` when a commit is needed |
+| `worktree-rebase-merge` | Commit worktree changes, rebase them, and safely merge into a target branch | `git-commit` |
 
-项目自己的 `AGENTS.md`、构建配置、验证规则和用户明确要求始终优先。各 skill 保留自己的
-授权边界，不会因为被调用而自动获得 push、merge、评论或其他远程写入权限。
+A project's own `AGENTS.md`, build configuration, validation rules, and explicit user instructions
+always take precedence. Each skill preserves its authorization boundaries and does not gain permission
+to push, merge, comment, or perform other remote writes merely by being invoked.
 
-## 安装
+## Installation
 
-本仓库是私有仓库。请先确保 Git、GitHub CLI 或 SSH 已经能够访问
-`git@github.com:tisfeng/skills.git`。
+This is a private repository. Make sure Git, GitHub CLI, or SSH can access
+`git@github.com:tisfeng/skills.git` before installing.
 
-查看可用技能：
+List the available skills:
 
 ```bash
 npx skills add tisfeng/skills --list
 ```
 
-将全部技能安装到 Codex 全局目录：
+Install every skill globally for Codex:
 
 ```bash
 npx skills add tisfeng/skills --skill '*' --global --agent codex --yes
 ```
 
-只为当前项目安装 PR review 组合：
+Install the pull-request review pair for the current project:
 
 ```bash
 npx skills add tisfeng/skills \
@@ -45,7 +48,7 @@ npx skills add tisfeng/skills \
   --yes
 ```
 
-只为当前项目安装 worktree 交付组合：
+Install the worktree delivery pair for the current project:
 
 ```bash
 npx skills add tisfeng/skills \
@@ -55,26 +58,28 @@ npx skills add tisfeng/skills \
   --yes
 ```
 
-默认安装范围是当前项目；`--global` 将技能安装到对应 Agent 的用户目录。Codex 的项目
-目录是 `.agents/skills/`，全局目录是 `~/.codex/skills/`。
+The default installation scope is the current project. `--global` installs skills in the selected
+agent's user directory. Codex uses `.agents/skills/` for project installations and
+`~/.codex/skills/` for global installations.
 
-## 更新
+## Updating
 
-更新当前项目安装的技能：
+Update skills installed in the current project:
 
 ```bash
 npx skills update --project
 ```
 
-更新全局技能：
+Update globally installed skills:
 
 ```bash
 npx skills update --global
 ```
 
-## 开发与验证
+## Development and Validation
 
-每个 skill 位于 `skills/<skill-name>/`，入口文件为 `SKILL.md`。修改后运行：
+Each skill lives in `skills/<skill-name>/` and uses `SKILL.md` as its entry point. Run the following
+checks after making changes:
 
 ```bash
 python3 scripts/validate-skills.py
@@ -84,7 +89,7 @@ python3 -m unittest discover -s skills/submit-pr/tests -p 'test_*.py'
 bash -n skills/review-pr/scripts/prepare-pr-branch.sh
 ```
 
-仓库的 GitHub Actions 会运行相同的结构、语法和单元测试检查。
+GitHub Actions runs the same structural, syntax, and unit-test checks.
 
 ## License
 
