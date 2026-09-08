@@ -1,6 +1,9 @@
-# Skills
+<h1 align="center">Skills</h1>
 
-简体中文 | [English](README.en.md)
+<p align="center">
+  <strong>简体中文</strong> ·
+  <a href="./README.en.md">English</a>
+</p>
 
 一组适用于大多数软件项目的通用 Agent Skills。技能以 Git、GitHub 和代码维护工作流为
 主，支持通过 [`skills`](https://github.com/vercel-labs/skills) CLI 安装到 Codex 及其

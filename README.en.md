@@ -1,6 +1,9 @@
-# Skills
+<h1 align="center">Skills</h1>
 
-[简体中文](README.md) | English
+<p align="center">
+  <a href="./README.md">简体中文</a> ·
+  <strong>English</strong>
+</p>
 
 A collection of general-purpose Agent Skills designed for most software projects. The skills
 focus on Git, GitHub, and code-maintenance workflows and can be installed for Codex and other
