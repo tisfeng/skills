@@ -16,7 +16,10 @@ NAME_PATTERN = re.compile(r"^name:\s*([^\n]+)$", re.MULTILINE)
 DESCRIPTION_PATTERN = re.compile(r"^description:\s*(?:\S|[>|])", re.MULTILINE)
 MARKDOWN_LINK_PATTERN = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 CONFLICT_MARKER_PATTERN = re.compile(r"^(?:<<<<<<<|=======|>>>>>>>)", re.MULTILINE)
-CATALOG_ROW_PATTERN = re.compile(r"^\|\s*`(?P<name>[a-z0-9-]+)`\s*\|", re.MULTILINE)
+LINKED_CATALOG_ROW_PATTERN = re.compile(
+    r"^\|\s*\[`(?P<name>[a-z0-9-]+)`\]\((?P<target>[^)\n]+)\)\s*\|",
+    re.MULTILINE,
+)
 
 
 def validate_markdown_links(markdown_file: Path) -> list[str]:
@@ -87,13 +90,28 @@ def validate_readme_catalog(skill_directories: Sequence[Path]) -> list[str]:
             errors.append(f"{filename}: missing README")
             continue
         errors.extend(validate_markdown_links(readme))
-        documented_names = set(CATALOG_ROW_PATTERN.findall(readme.read_text(encoding="utf-8")))
+        linked_entries = LINKED_CATALOG_ROW_PATTERN.findall(
+            readme.read_text(encoding="utf-8")
+        )
+        skill_entries = [
+            (name, target)
+            for name, target in linked_entries
+            if name in expected_names or target.startswith("skills/")
+        ]
+        documented_names = {name for name, _ in skill_entries}
         missing = sorted(expected_names - documented_names)
         unknown = sorted(documented_names - expected_names)
         if missing:
             errors.append(f"{filename}: missing skills in catalog: {', '.join(missing)}")
         if unknown:
             errors.append(f"{filename}: unknown skills in catalog: {', '.join(unknown)}")
+        for name, target in skill_entries:
+            if name in expected_names:
+                expected_target = f"skills/{name}/SKILL.md"
+                if target != expected_target:
+                    errors.append(
+                        f"{filename}: {name} must link to {expected_target}, found {target}"
+                    )
     return errors
 
 

@@ -13,18 +13,27 @@
 
 | Skill | 用途 | 配套 Skill |
 | --- | --- | --- |
-| `code-simplifier` | 在保持行为不变的前提下简化近期代码改动 | 无 |
-| `git-commit` | 从暂存区创建经过校验的 Angular-style 双语提交 | 无 |
-| `review` | 审查工作树、提交、提交范围、文件或模块 | 无 |
-| `review-pr` | 准备并审查 GitHub Pull Request，完整处理 review threads | `review` |
-| `submit-pr` | 规划、推送并创建或复用 GitHub Pull Request | 需要提交时使用 `git-commit` |
-| `worktree-rebase-merge` | 提交 worktree 变更、执行 rebase，并安全合并到目标分支 | `git-commit` |
+| [`code-simplifier`](skills/code-simplifier/SKILL.md) | 在保持行为不变的前提下简化近期代码改动 | 无 |
+| [`git-commit`](skills/git-commit/SKILL.md) | 从暂存区创建经过校验的 Angular-style 双语提交 | 无 |
+| [`review`](skills/review/SKILL.md) | 审查工作树、提交、提交范围、文件或模块 | 无 |
+| [`review-pr`](skills/review-pr/SKILL.md) | 准备并审查 GitHub Pull Request，完整处理 review threads | [`review`](skills/review/SKILL.md) |
+| [`submit-pr`](skills/submit-pr/SKILL.md) | 规划、推送并创建或复用 GitHub Pull Request | 需要提交时使用 [`git-commit`](skills/git-commit/SKILL.md) |
+| [`worktree-rebase-merge`](skills/worktree-rebase-merge/SKILL.md) | 提交 worktree 变更、执行 rebase，并安全合并到目标分支 | [`git-commit`](skills/git-commit/SKILL.md) |
 
-项目的 `AGENTS.md`、构建与验证配置以及用户明确指令优先于本仓库的默认规则。涉及 push、merge、发布、评论等远程操作时，Skill 只会在用户明确授权且相应工作流条件满足后执行。
+## 子代理目录
+
+| 子代理 | 用途 |
+| --- | --- |
+| [`planner`](.codex/agents/planner.toml) | 只读分析需求、证据与取舍，输出实施建议 |
+| [`reviewer`](.codex/agents/reviewer.toml) | 只读审查指定快照，提供有证据的缺陷与修复建议 |
+| [`tester`](.codex/agents/tester.toml) | 在授权范围内编写行为测试并执行针对性验证 |
+| [`git-delivery`](.codex/agents/git-delivery.toml) | 串行执行已授权的本地提交与 worktree 集成，不执行 push |
+
+项目的 `AGENTS.md`、构建与验证配置以及用户明确指令优先于本仓库的默认规则。涉及 push、merge、发布、评论等远程操作时，Skills 与子代理只会在用户明确授权且相应工作流条件满足后执行。
 
 ## 安装
 
-本仓库提供两类可独立安装的资源：Skills，以及 `planner`、`reviewer`、`tester` 和 `git-delivery` 四个 Codex 子代理配置。Skills 与子代理使用不同的安装器，并分别维护自己的 lock 文件。
+Skills 与 Codex 子代理使用不同的安装器，并分别维护自己的 lock 文件。
 
 安装 Codex 子代理需要 Git 和 Node.js 20 或更高版本。以下命令未指定 tag，会跟随仓库默认分支；lock 文件记录实际安装的源码 revision 和内容哈希。
 

@@ -20,6 +20,44 @@ REQUIRED_FIELDS = {
     "developer_instructions": str,
 }
 VALID_SANDBOX_MODES = {"read-only", "workspace-write", "danger-full-access"}
+README_FILES = ("README.md", "README.en.md")
+LINKED_CATALOG_ROW_PATTERN = re.compile(
+    r"^\|\s*\[`(?P<name>[a-z0-9_-]+)`\]\((?P<target>[^)\n]+)\)\s*\|",
+    re.MULTILINE,
+)
+
+
+def validate_readme_catalog(agent_paths: list[Path]) -> list[str]:
+    errors: list[str] = []
+    expected_names = {path.stem for path in agent_paths}
+    for filename in README_FILES:
+        readme = ROOT / filename
+        if not readme.is_file():
+            errors.append(f"{filename}: missing README")
+            continue
+        linked_entries = LINKED_CATALOG_ROW_PATTERN.findall(
+            readme.read_text(encoding="utf-8")
+        )
+        agent_entries = [
+            (name, target)
+            for name, target in linked_entries
+            if name in expected_names or target.startswith(".codex/agents/")
+        ]
+        documented_names = {name for name, _ in agent_entries}
+        missing = sorted(expected_names - documented_names)
+        unknown = sorted(documented_names - expected_names)
+        if missing:
+            errors.append(f"{filename}: missing agents in catalog: {', '.join(missing)}")
+        if unknown:
+            errors.append(f"{filename}: unknown agents in catalog: {', '.join(unknown)}")
+        for name, target in agent_entries:
+            if name in expected_names:
+                expected_target = f".codex/agents/{name}.toml"
+                if target != expected_target:
+                    errors.append(
+                        f"{filename}: {name} must link to {expected_target}, found {target}"
+                    )
+    return errors
 
 
 def main() -> int:
@@ -56,6 +94,8 @@ def main() -> int:
         instructions = data.get("developer_instructions", "")
         if ".agents/skills/" in instructions or "Easydict" in instructions:
             errors.append(f"{path.relative_to(ROOT)}: contains a repository-specific dependency")
+
+    errors.extend(validate_readme_catalog(paths))
 
     if errors:
         print("Agent validation failed:", file=sys.stderr)

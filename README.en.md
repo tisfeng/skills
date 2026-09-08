@@ -13,18 +13,27 @@ This repository is part of the agent development workflow for [Easydict](https:/
 
 | Skill | Purpose | Companion Skill |
 | --- | --- | --- |
-| `code-simplifier` | Simplify recent code changes without altering behavior | None |
-| `git-commit` | Create validated Angular-style bilingual commits from staged changes | None |
-| `review` | Review a working tree, commit, commit range, file, or module | None |
-| `review-pr` | Prepare and review GitHub pull requests, including complete review threads | `review` |
-| `submit-pr` | Plan, push, and create or reuse GitHub pull requests | `git-commit` when a commit is needed |
-| `worktree-rebase-merge` | Commit worktree changes, rebase them, and safely merge into a target branch | `git-commit` |
+| [`code-simplifier`](skills/code-simplifier/SKILL.md) | Simplify recent code changes without altering behavior | None |
+| [`git-commit`](skills/git-commit/SKILL.md) | Create validated Angular-style bilingual commits from staged changes | None |
+| [`review`](skills/review/SKILL.md) | Review a working tree, commit, commit range, file, or module | None |
+| [`review-pr`](skills/review-pr/SKILL.md) | Prepare and review GitHub pull requests, including complete review threads | [`review`](skills/review/SKILL.md) |
+| [`submit-pr`](skills/submit-pr/SKILL.md) | Plan, push, and create or reuse GitHub pull requests | [`git-commit`](skills/git-commit/SKILL.md) when a commit is needed |
+| [`worktree-rebase-merge`](skills/worktree-rebase-merge/SKILL.md) | Commit worktree changes, rebase them, and safely merge into a target branch | [`git-commit`](skills/git-commit/SKILL.md) |
 
-A project's own `AGENTS.md`, build and validation configuration, and explicit user instructions take precedence over this repository's defaults. A Skill performs remote operations such as pushing, merging, publishing, or commenting only with explicit user authorization and when the applicable workflow conditions are satisfied.
+## Custom Agent Catalog
+
+| Custom Agent | Purpose |
+| --- | --- |
+| [`planner`](.codex/agents/planner.toml) | Analyze requirements, evidence, and tradeoffs in read-only mode and recommend an implementation plan |
+| [`reviewer`](.codex/agents/reviewer.toml) | Review a specified snapshot in read-only mode and report evidence-backed defects and suggested fixes |
+| [`tester`](.codex/agents/tester.toml) | Write behavioral tests within the authorized scope and run targeted validation |
+| [`git-delivery`](.codex/agents/git-delivery.toml) | Serially perform authorized local commits and worktree integration without pushing |
+
+A project's own `AGENTS.md`, build and validation configuration, and explicit user instructions take precedence over this repository's defaults. Skills and custom agents perform remote operations such as pushing, merging, publishing, or commenting only with explicit user authorization and when the applicable workflow conditions are satisfied.
 
 ## Installation
 
-This repository provides two independently installable resource types: Skills and four Codex custom-agent configurations—`planner`, `reviewer`, `tester`, and `git-delivery`. Skills and custom agents use different installers and maintain separate lock files.
+Skills and Codex custom agents use different installers and maintain separate lock files.
 
 Installing Codex custom agents requires Git and Node.js 20 or later. The commands below do not specify a tag, so they follow the repository's default branch; lock files record the source revision and content hashes actually installed.
 
