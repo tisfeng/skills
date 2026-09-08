@@ -8,8 +8,8 @@ const LOCK_VERSION = 1;
 
 function usage() {
   return `Usage:
-  codex-agents add <source[#ref]> [--agent <name>] [--global] [--force]
-  codex-agents add <source[#ref]> --list
+  codex-agents add <git-source[#ref]|local-path> [--agent <name>] [--global] [--force]
+  codex-agents add <git-source[#ref]|local-path> --list
   codex-agents update [--agent <name>] [--global] [--force]
 
 Options:
@@ -18,7 +18,9 @@ Options:
   --force              Replace a file whose contents differ from its recorded lock hash.
   --list               List the agents available in a source without writing files.
   --codex-home <path>  Override the global Codex home (useful for testing and automation).
-  --help               Show this help text.`;
+  --help               Show this help text.
+
+Git sources may select a revision with #ref. Local paths always use their current checkout.`;
 }
 
 function sha256(content) {
@@ -59,8 +61,8 @@ function parseArgs(argv) {
 function splitSource(source) {
   const separator = source.lastIndexOf('#');
   return separator === -1
-    ? { location: source, ref: null }
-    : { location: source.slice(0, separator), ref: source.slice(separator + 1) || null };
+    ? { location: source, ref: null, hasRef: false }
+    : { location: source.slice(0, separator), ref: source.slice(separator + 1) || null, hasRef: true };
 }
 
 function isLocalSource(location) {
@@ -78,10 +80,15 @@ function sourceUrl(location) {
 }
 
 function withSource(source, callback) {
-  const { location, ref } = splitSource(source);
+  const { location, ref, hasRef } = splitSource(source);
   if (isLocalSource(location)) {
     const root = resolve(location);
     if (!existsSync(root)) throw new Error(`Source path does not exist: ${root}`);
+    if (hasRef) {
+      throw new Error(
+        `Local source refs are not supported: ${source}. Use the local checkout directly or a Git URL with #ref.`,
+      );
+    }
     let revision = 'local';
     try {
       revision = gitOutput(['rev-parse', 'HEAD'], root);
@@ -157,8 +164,12 @@ function readLock(lockPath) {
 
 function writeAtomically(path, content) {
   const temporaryPath = `${path}.tmp-${process.pid}`;
-  writeFileSync(temporaryPath, content);
-  renameSync(temporaryPath, path);
+  try {
+    writeFileSync(temporaryPath, content);
+    renameSync(temporaryPath, path);
+  } finally {
+    rmSync(temporaryPath, { force: true });
+  }
 }
 
 function selectedAgents(available, requested) {
@@ -173,16 +184,11 @@ function selectedAgents(available, requested) {
 
 function installAgents({ agents, source, ref, revision, options, paths }) {
   const lock = readLock(paths.lockPath);
-  const installed = [];
-  const createdDirectories = new Set();
-  for (const agent of agents) {
-    if (!createdDirectories.has(paths.agentsDirectory)) {
-      // Recursive creation is deliberately local to the selected Codex scope.
-      mkdirSync(paths.agentsDirectory, { recursive: true });
-      createdDirectories.add(paths.agentsDirectory);
-    }
+  const nextLock = { ...lock, agents: { ...lock.agents } };
+  const operations = agents.map((agent) => {
     const target = join(paths.agentsDirectory, agent.filename);
-    const targetHash = existsSync(target) ? sha256(readFileSync(target)) : null;
+    const previousContent = existsSync(target) ? readFileSync(target) : null;
+    const targetHash = previousContent === null ? null : sha256(previousContent);
     const incomingHash = sha256(agent.content);
     const previous = lock.agents[agent.name];
     const unchanged = targetHash === incomingHash;
@@ -193,19 +199,57 @@ function installAgents({ agents, source, ref, revision, options, paths }) {
         `Refusing to overwrite locally modified ${target}. Use --force after reviewing the change.`,
       );
     }
-    if (!unchanged) writeAtomically(target, agent.content);
-    lock.agents[agent.name] = {
+    nextLock.agents[agent.name] = {
       source,
       ref,
       revision,
       relativePath: `.codex/agents/${agent.filename}`,
       fileHash: incomingHash,
     };
-    installed.push({ name: agent.name, changed: !unchanged });
+    return { ...agent, target, previousContent, changed: !unchanged };
+  });
+
+  const previousLockContent = existsSync(paths.lockPath) ? readFileSync(paths.lockPath) : null;
+  const writtenOperations = [];
+  try {
+    // No target is created until every selected agent has passed conflict checks.
+    mkdirSync(paths.agentsDirectory, { recursive: true });
+    for (const operation of operations) {
+      if (operation.changed) {
+        writeAtomically(operation.target, operation.content);
+        writtenOperations.push(operation);
+      }
+    }
+    mkdirSync(dirname(paths.lockPath), { recursive: true });
+    writeAtomically(paths.lockPath, `${JSON.stringify(nextLock, null, 2)}\n`);
+  } catch (error) {
+    const rollbackErrors = [];
+    for (const operation of [...writtenOperations].reverse()) {
+      try {
+        if (operation.previousContent === null) {
+          rmSync(operation.target, { force: true });
+        } else {
+          writeAtomically(operation.target, operation.previousContent);
+        }
+      } catch (rollbackError) {
+        rollbackErrors.push(`${operation.target}: ${rollbackError.message}`);
+      }
+    }
+    try {
+      if (previousLockContent === null) {
+        rmSync(paths.lockPath, { force: true });
+      } else {
+        writeAtomically(paths.lockPath, previousLockContent);
+      }
+    } catch (rollbackError) {
+      rollbackErrors.push(`${paths.lockPath}: ${rollbackError.message}`);
+    }
+    const rollbackDetail = rollbackErrors.length > 0
+      ? ` Rollback also failed: ${rollbackErrors.join('; ')}`
+      : '';
+    throw new Error(`Could not install selected agents: ${error.message}.${rollbackDetail}`);
   }
-  mkdirSync(dirname(paths.lockPath), { recursive: true });
-  writeAtomically(paths.lockPath, `${JSON.stringify(lock, null, 2)}\n`);
-  return installed;
+  return operations.map(({ name, changed }) => ({ name, changed }));
 }
 
 async function add(source, options) {

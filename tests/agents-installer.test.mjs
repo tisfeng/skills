@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { tmpdir } from 'node:os';
@@ -18,6 +18,15 @@ function makeSource(root, description = 'Read-only planner.') {
   writeFileSync(
     join(agents, 'planner.toml'),
     `name = "planner"\ndescription = "${description}"\nmodel = "gpt-6-astra"\nmodel_reasoning_effort = "medium"\nsandbox_mode = "read-only"\ndeveloper_instructions = "Read only."\n`,
+  );
+}
+
+function addAgent(root, name, description) {
+  const agents = join(root, '.codex', 'agents');
+  mkdirSync(agents, { recursive: true });
+  writeFileSync(
+    join(agents, `${name}.toml`),
+    `name = "${name}"\ndescription = "${description}"\nmodel = "gpt-6-astra"\nmodel_reasoning_effort = "medium"\nsandbox_mode = "read-only"\ndeveloper_instructions = "Read only."\n`,
   );
 }
 
@@ -100,5 +109,53 @@ test('updates a lock-managed agent and supports a global target override', () =>
     rmSync(root, { recursive: true, force: true });
     rmSync(source, { recursive: true, force: true });
     rmSync(globalHome, { recursive: true, force: true });
+  }
+});
+
+test('preflights every selected agent before changing files or the lock', () => {
+  const root = makeTemporaryDirectory();
+  const source = makeTemporaryDirectory();
+  try {
+    makeSource(source, 'First planner version.');
+    addAgent(source, 'reviewer', 'First reviewer version.');
+    assert.equal(run(['add', source], root).status, 0);
+
+    const planner = join(root, '.codex', 'agents', 'planner.toml');
+    const reviewer = join(root, '.codex', 'agents', 'reviewer.toml');
+    const lock = join(root, '.codex', 'agents-lock.json');
+    const plannerBefore = readFileSync(planner);
+    const lockBefore = readFileSync(lock);
+
+    makeSource(source, 'Second planner version.');
+    addAgent(source, 'reviewer', 'Second reviewer version.');
+    writeFileSync(reviewer, 'name = "reviewer"\n# local change\n');
+
+    const result = run(['add', source], root);
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Refusing to overwrite locally modified/);
+    assert.deepEqual(readFileSync(planner), plannerBefore);
+    assert.match(readFileSync(reviewer, 'utf8'), /local change/);
+    assert.deepEqual(readFileSync(lock), lockBefore);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(source, { recursive: true, force: true });
+  }
+});
+
+test('rejects a ref on a local source instead of recording an unverified ref', () => {
+  const root = makeTemporaryDirectory();
+  const source = makeTemporaryDirectory();
+  try {
+    makeSource(source);
+
+    const result = run(['add', `${source}#v1.0.0`], root);
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Local source refs are not supported/);
+    assert.equal(existsSync(join(root, '.codex')), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(source, { recursive: true, force: true });
   }
 });
