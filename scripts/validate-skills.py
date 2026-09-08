@@ -81,7 +81,7 @@ def validate_conflict_markers() -> list[str]:
 def validate_readme_catalog(skill_directories: Sequence[Path]) -> list[str]:
     errors: list[str] = []
     expected_names = {directory.name for directory in skill_directories}
-    for filename in ("README.md", "README.zh-CN.md"):
+    for filename in ("README.md", "README.en.md"):
         readme = REPOSITORY_ROOT / filename
         if not readme.is_file():
             errors.append(f"{filename}: missing README")
