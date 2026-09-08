@@ -5,9 +5,9 @@
   <strong>English</strong>
 </p>
 
-A collection of general-purpose Agent Skills designed for most software projects. The skills
-focus on Git, GitHub, and code-maintenance workflows and can be installed for Codex and other
-compatible agents through the [`skills`](https://github.com/vercel-labs/skills) CLI.
+A general-purpose collection of Agent Skills and Codex custom-agent configurations for software projects. It covers code simplification, Git commits, code review, pull request delivery, and worktree integration. Skills are installed with the [`skills`](https://github.com/vercel-labs/skills) CLI; Codex custom agents are installed with `@tisfeng/codex-agents`.
+
+This repository is part of the agent development workflow for [Easydict](https://github.com/tisfeng/Easydict). Easydict uses the Skills and Codex custom-agent configurations published here for day-to-day development, code review, and Git delivery.
 
 ## Skill Catalog
 
@@ -17,17 +17,16 @@ compatible agents through the [`skills`](https://github.com/vercel-labs/skills) 
 | `git-commit` | Create validated Angular-style bilingual commits from staged changes | None |
 | `review` | Review a working tree, commit, commit range, file, or module | None |
 | `review-pr` | Prepare and review GitHub pull requests, including complete review threads | `review` |
-| `submit-pr` | Plan, push, and create or reuse GitHub Pull Request | `git-commit` when a commit is needed |
+| `submit-pr` | Plan, push, and create or reuse GitHub pull requests | `git-commit` when a commit is needed |
 | `worktree-rebase-merge` | Commit worktree changes, rebase them, and safely merge into a target branch | `git-commit` |
 
-A project's own `AGENTS.md`, build configuration, validation rules, and explicit user instructions
-always take precedence. Each skill performs remote actions only when the current request and its
-workflow authorize them.
+A project's own `AGENTS.md`, build and validation configuration, and explicit user instructions take precedence over this repository's defaults. A Skill performs remote operations such as pushing, merging, publishing, or commenting only with explicit user authorization and when the applicable workflow conditions are satisfied.
 
 ## Installation
 
-This repository publishes both Skills and four Codex custom-agent configurations: `planner`,
-`reviewer`, `tester`, and `git-delivery`. They use separate installers and lock files.
+This repository provides two independently installable resource types: Skills and four Codex custom-agent configurations—`planner`, `reviewer`, `tester`, and `git-delivery`. Skills and custom agents use different installers and maintain separate lock files.
+
+Installing Codex custom agents requires Git and Node.js 20 or later. The commands below do not specify a tag, so they follow the repository's default branch; lock files record the source revision and content hashes actually installed.
 
 ### Project installation (default)
 
@@ -43,9 +42,7 @@ Install every custom agent in the current project:
 npx @tisfeng/codex-agents add tisfeng/skills --agent '*'
 ```
 
-Skills write to `.agents/skills/` and `skills-lock.json`; custom agents write to `.codex/agents/`
-and `.codex/agents-lock.json`. Commit both lock files to preserve the source revision and content
-hashes selected for the team.
+Skills are written to `.agents/skills/` and recorded in `skills-lock.json`; custom agents are written to `.codex/agents/` and recorded in `.codex/agents-lock.json`. Commit both lock files so the team uses the same source revisions and content.
 
 ### Global installation
 
@@ -61,8 +58,7 @@ Install every custom agent in Codex's global directory:
 npx @tisfeng/codex-agents add tisfeng/skills --agent '*' --global
 ```
 
-Skills write to `~/.codex/skills/`; custom agents write to `~/.codex/agents/`. Their global lock
-files are stored in the corresponding directories.
+Skills are written to `~/.codex/skills/`; custom agents are written to `~/.codex/agents/`. Each installer maintains its global lock file in the user's directories, so these files do not need to be committed to a project repository.
 
 ## Updating
 
@@ -80,9 +76,7 @@ npx skills update --global
 npx @tisfeng/codex-agents update --global
 ```
 
-If a custom-agent TOML was modified locally, the installer refuses to overwrite a file whose hash
-differs from the lock file. After reviewing the replacement, append `--force` to the relevant `add`
-or `update` command.
+If a custom-agent TOML was modified locally, the installer refuses to overwrite a file whose hash differs from the lock file. After confirming the replacement, append `--force` to the relevant `add` or `update` command.
 
 ## License
 
