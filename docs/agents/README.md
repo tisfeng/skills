@@ -20,7 +20,12 @@
 - 获准 implementation 的跨模块、多步骤或高风险工作，在 `docs/exec-plans/active/` 创建计划。
 - 有仓库文件差异的 implementation 在同一任务创建或更新一条 history；无差异时不创建空记录。
 - 实施完成后，将 active 计划移至 `completed/`，并在 history 中链接它。
-- history 记录目标、范围、关键决策、验证和交付，不复制完整对话。
+- history 与同任务变更一起完成最终验证和精确暂存；允许自动提交时进入同一个提交。history
+  缺失时在允许范围内补齐，用户明确排除该路径时不扩权并报告自动交付受阻。
+- 显式提交已有 staged 内容不反向要求新增 implementation history；仅更新 history 的任务不递归
+  创建第二条记录。
+- 计划记录意图、交付授权、持续限制、初始 Git 快照、允许范围和 Agent-owned paths；history
+  记录目标、实际变更、验证与交付，不复制完整对话。
 
 ## 维护原则
 

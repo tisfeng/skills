@@ -1,9 +1,64 @@
 # Git 工作流
 
-- Git 操作遵循用户明确的提交、集成、推送和发布授权；implementation 不自动授权远程副作用。
-- 未经明确授权，不改变索引、不 push、不 pull、不 rebase、不 merge 或强制移动 ref。
-- 显式调用 `git-commit` 时，先阅读 `skills/git-commit/SKILL.md`；显式调用 worktree 集成时，先
-  阅读 `skills/worktree-rebase-merge/SKILL.md`。
-- 交付前核对实际 diff、允许路径与验证结果。提交仅包含当前任务已获准的内容。
-- `git-delivery` 只执行主 Agent 已核验和展示的交付范围；它不修改产品内容，也不自行扩大 staged
-  范围。
+本文只规定 Git 状态保护、暂存和本地交付；请求语义和变更门禁分别见
+[`request-boundary.md`](request-boundary.md) 与 [`execution-safety.md`](execution-safety.md)。
+
+## 基本安全
+
+- 保留用户现有 staged、unstaged 和 untracked 内容，不重写或丢弃无关工作树状态。
+- implementation 默认候选自动本地提交；明确禁止提交、仅预览或暂缓交付时不得暂存或提交。
+- 自动本地提交不授权 push、pull、rebase、merge、创建分支、发布或强制移动 ref。
+- 每个提交聚焦一个连贯变更，使用 Angular-style 信息，并遵循实际加载的 `git-commit` Skill。
+
+## Git 交付顺序
+
+1. 第一次写入前记录 `initial_head`、初始 staged/unstaged/untracked 路径、冲突、任务允许路径，
+   并为任务相关现有内容保留分层 diff 或内容摘要，不能仅凭路径推断归属。
+2. 主 Agent 根据请求边界确定 `delivery_authorization`，根据执行安全规则判断是否进入 protected。
+   自动提交资格失败不能用于否决用户明确授权的 staged-only 提交。
+3. 所有实现和其他写入 Agent 完成后，主 Agent 冻结 `agent_owned_paths`、`expected_commit_paths`
+   和最终验证结果，再串行调用 `git-delivery`。
+4. `commit` 与 `auto-local-commit` 操作使用实际加载的 `git-commit` Skill；`integration` 操作使用
+   实际加载的 `worktree-rebase-merge` Skill。找不到所需 Skill 时 fail closed，不改用缩减流程。
+5. 需要创建提交时先执行只读 `prepare`，在主对话展示提交信息预览，再由同一交付 Agent 执行
+   `apply`。普通预览不是新的确认门槛；只有用户要求确认、仅预览或暂缓时才等待批准。
+
+## 通用 Git 交付子代理
+
+`.codex/agents/git-delivery.toml` 是本仓库发布的通用本地 Git 交付角色。它只消费主 Agent 已确认的
+授权、operation、phase、初始快照和允许路径，不修改产品内容，也不自行决定宿主仓库是否默认提交。
+
+- 已有 staged 内容的显式 `commit`：`prepare` 只冻结 staged paths 与 staged raw patch；`apply`
+  只复验该 patch，绝不运行 `git add`，同路径未暂存内容不能进入提交。
+- 空索引且允许暂存的 `commit` 或 `auto-local-commit`：`prepare` 冻结候选路径、未暂存 raw patch、
+  任务相关未跟踪内容摘要和草稿；`apply` 将精确暂存作为执行 `git-commit` Skill 的同一个唯一暂存
+  步骤，不能由子代理和 Skill 重复暂存。
+- 预期暂存集合是冻结的 `expected_commit_paths`，必须属于 `task_allowed_paths`；允许范围较宽时，
+  不得要求未修改路径也进入 staged。
+- `commit` 和 `auto-local-commit` 只执行 `git-commit`；只有 `integration` 授权才允许执行
+  `worktree-rebase-merge` 明示的分支、rebase、merge 或临时 worktree 操作。
+- `integration` 复用既有源提交且无需创建新提交时，只冻结和复验提交范围，不要求提交信息预览。
+- 配置、授权、模型、范围、HEAD、索引、冲突、目标 worktree 或验证不确定时进入 protected。
+- 若本轮正在更新 `git-delivery` 配置且运行时尚不能重新发现它，只可按 TOML 中完全相同的模型、
+  推理强度、权限和指令启动 bootstrap fallback；无法精确复现时 fail closed。
+- 完成后主 Agent 独立核验提交哈希、实际信息、分支、最终工作树和未 push 状态。
+
+## 自动本地提交条件
+
+以下条件必须同时满足：
+
+- 任务是 `implementation`，`delivery_authorization=auto-local-commit`，且没有仍有效的禁止、确认
+  或暂缓交付要求；
+- 初始索引为空，任务期间没有新增非 Agent staged 内容；
+- `initial_head` 未变化，当前索引无冲突，用户内容与 Agent 变更可以清晰分离；
+- Agent 产生仓库文件差异，并创建或更新同任务 history；
+- `task_allowed_paths`、`agent_owned_paths` 和 `expected_commit_paths` 已明确；
+- 最终 staged paths 与 `expected_commit_paths` 完全相等，且后者属于 `task_allowed_paths`；
+- 必要审查与验证覆盖最终内容，没有未处理的阻塞 finding、验证失败或证据缺口；
+- 当前任务尚未执行过自动提交。
+
+自动提交只暂存 `expected_commit_paths`，绝不使用 `git add .`。没有仓库差异时不创建空提交。
+显式交付遵循所选工作流，不反向套用 implementation 的 history 或初始空索引前提。
+
+条件不满足时保留现场，报告受阻操作和原因；可以继续范围内的实施、修复与复验。不能因为用户
+没有再次说“提交”，就把有效的 `auto-local-commit` 降级为未提交。

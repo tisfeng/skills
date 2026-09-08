@@ -46,30 +46,39 @@ Agent 或项目路径中。
 ## 经仓库规则授权的自动交付
 
 只有仓库规则或调用方已明确授权自动本地提交时，才调用此模式。这是收尾步骤，不是在每次
-编辑后执行。规划、讨论、分析以及仅修改计划或历史文档的任务不进入此模式；是否包含 Agent
-文档由仓库规则决定。
+编辑后执行。规划、讨论和分析不进入此模式；已授权 implementation 是否包含仅修改计划、history
+或其他 Agent 文档的任务由宿主仓库规则决定。
 
 第一次写入前记录：
 
+- `initial_head`
 - `initial_staged_paths`
 - `initial_unstaged_paths`
 - `initial_untracked_paths`
 - `task_allowed_paths`
+- `agent_owned_paths`
+
+实现完成后冻结 `expected_commit_paths`。它是本次实际要提交的 Agent-owned 路径集合，必须属于
+`task_allowed_paths`；允许范围可以比实际修改集合更宽，不能据此暂存未修改路径。
 
 当 `initial_staged_paths` 非空、Agent 暂存前当前索引已不再为空、Agent 路径与用户现有
 变更重叠、索引存在冲突或必要验证失败时，跳过自动交付。在所有这些情况下都保持用户
 的暂存边界不变。
 
+“Agent 暂存前”指本次自动交付唯一暂存步骤开始之前。`git-delivery` 在同一 apply 中按冻结快照
+完成该步骤后，非空索引是预期结果，不得再次暂存，也不应据此反向判定自动交付失效。
+
 符合自动交付条件时：
 
 1. 确认任务属于仓库规则允许自动交付的类别，已有明确授权且没有禁止自动提交的约束，
    修改了授权范围内的文件，并且尚未执行自动提交。
-2. 重新读取 `HEAD`、`git status --short` 和冲突状态；如果 `HEAD` 或初始状态发生变化，
-   立即跳过自动交付并保留现场供手动交付。
-3. 只使用 `git add -- <paths>` 暂存 Agent 明确拥有的路径；此模式下绝不使用
+2. 重新读取 `HEAD`、`git status --short` 和冲突状态。如果 `initial_head`、用户归属内容、
+   非预期索引或冲突状态发生变化，立即跳过自动交付并进入 protected；Agent 在允许路径内产生的
+   预期 implementation 差异不属于初始状态漂移。
+3. 只使用 `git add -- <expected_commit_paths>` 暂存冻结的 Agent-owned 路径；此模式下绝不使用
    `git add .`。
 4. 重新读取 `git diff --cached --name-only` 和暂存区原始 patch，确认路径集合与
-   `task_allowed_paths` 完全一致且只包含任务范围。
+   `expected_commit_paths` 完全一致，并且后者属于 `task_allowed_paths`。
 5. 使用本 skill 的提交信息契约及提交前后校验流程，并执行一次本地 `git commit`。
 6. 遵循 **Post-Commit Report**。不要 push、pull、rebase、merge 或创建分支。
 
