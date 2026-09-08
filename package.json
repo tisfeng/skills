@@ -4,7 +4,7 @@
   "description": "Install versioned Codex custom-agent configurations from Git sources.",
   "repository": {
     "type": "git",
-    "url": "https://github.com/tisfeng/skills.git"
+    "url": "git+https://github.com/tisfeng/skills.git"
   },
   "type": "module",
   "bin": {
