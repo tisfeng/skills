@@ -58,9 +58,29 @@ implementation 扩大为 push、pull、rebase 或 merge。
 
 报告 protected 时说明受阻操作、证据、可继续工作和具体缺口，不把未验证结果写成通过。
 
+## Planner 委派决策
+
+`intent_mode` 与是否委派 `planner` 是两个独立判断。先按上文确定请求是 `planning` 或
+`implementation`，再按本节决定是否需要独立规划；`planning` 的只读性质不能豁免该决策，调用
+`planner` 也不产生 implementation、外部写入或发布授权。
+
+| 当前任务目标 | Planner 决策 |
+| --- | --- |
+| 用户明确要求 `planner` 或独立方案评审 | 必须委派并等待只读 `planner`。 |
+| 设计、评估或实施发布、部署或外部服务写入流程 | 必须委派，即使用户只要求建议方案。例如 Git tag、npm 与 GitHub Actions 的发布编排。 |
+| 需要在两个以上模块或系统间就接口、执行顺序、兼容性或失败恢复作出取舍 | 必须委派。 |
+| 设计或实施不可逆变更、数据迁移或其他高风险操作 | 必须委派。 |
+| 仅解释已有行为、查询事实或进行单模块低风险修改，且未命中以上条件 | 主 Agent 可直接处理。 |
+
+按任务目标和实际取舍判断，不按修改文件数量、产品名称或关键词判断。例如，解释 `npm publish`
+参数不自动触发；设计“一句话发布版本”流程必须触发。
+
+命中条件后，主 Agent 可以同步调查事实，但必须收到 `planner` 结论并核验关键事实，才能输出最终
+方案或实施依赖该结论的修改。最终回复如实说明是否完成独立规划。用户明确禁止委派时遵从该限制，
+并说明独立性缺失。
+
 ## 子代理
 
-- 用户要求 planner、独立方案评审、跨模块取舍或高风险变更时，委派并等待只读 `planner`。
 - 有行为风险的 implementation 优先使用只读 `reviewer`；需要编写测试或复杂独立验证时使用
   `tester`。简单文档、低风险配置或小改动由主 Agent 完成必要检查。
 - 委派时传递目标、成功标准、有效授权、允许路径、初始或冻结快照和预期输出。子代理不能扩大
@@ -70,4 +90,4 @@ implementation 扩大为 push、pull、rebase 或 merge。
 - `git-delivery` 只消费已确认的交付动作；其 bootstrap fallback 以
   [`git-workflow.md`](git-workflow.md) 为准，无法精确复现时 fail closed。
 - planner、reviewer 或 tester 配置不可用时，主 Agent 只能在当前授权范围内回退，并如实说明
-  独立性缺失。
+  不可用原因与独立性缺失，不得声称已完成独立评审。
