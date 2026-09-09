@@ -26,15 +26,18 @@
 ## 通用 Git 交付子代理
 
 `.codex/agents/git-delivery.toml` 是本仓库发布的通用本地 Git 交付角色。它只消费主 Agent 已确认的
-授权、operation、phase、初始快照和允许路径，不修改产品内容，也不自行决定宿主仓库是否默认提交。
+授权、operation、phase、初始快照、允许路径和 `staging_strategy`，不修改产品内容，也不自行决定宿主
+仓库是否默认提交。
 
-- 已有 staged 内容的显式 `commit`：`prepare` 只冻结 staged paths 与 staged raw patch；`apply`
-  只复验该 patch，绝不运行 `git add`，同路径未暂存内容不能进入提交。
-- 空索引且允许暂存的 `commit` 或 `auto-local-commit`：`prepare` 冻结候选路径、未暂存 raw patch、
-  任务相关未跟踪内容摘要和草稿；`apply` 将精确暂存作为执行 `git-commit` Skill 的同一个唯一暂存
-  步骤，不能由子代理和 Skill 重复暂存。
-- 预期暂存集合是冻结的 `expected_commit_paths`，必须属于 `task_allowed_paths`；允许范围较宽时，
-  不得要求未修改路径也进入 staged。
+- 已有 staged 内容的显式 `commit` 使用 `existing-index`：`prepare` 只冻结 staged paths 与 staged raw
+  patch；`apply` 只复验该 patch，绝不运行 `git add`，同路径未暂存内容不能进入提交。
+- 空索引且允许暂存：`prepare` 冻结 `staging_strategy`、候选路径、未暂存 raw patch、任务相关未跟踪
+  内容摘要和草稿；`apply` 将该策略作为执行 `git-commit` Skill 的同一个唯一暂存步骤，不能由子代理和
+  Skill 重复暂存。显式、未限定范围的 `commit` 或 `integration` 可使用 `explicit-worktree-once`；
+  显式路径范围使用 `explicit-paths`；自动本地提交只能使用 `auto-exact`。
+- `explicit-worktree-once` 的 staged paths 与 raw patch 必须完全等于冻结的全工作树候选；
+  `explicit-paths` 与 `auto-exact` 的预期暂存集合必须属于 `task_allowed_paths`，允许范围较宽时不得要求
+  未修改路径也进入 staged。
 - `commit` 和 `auto-local-commit` 只执行 `git-commit`；只有 `integration` 授权才允许执行
   `worktree-rebase-merge` 明示的分支、rebase、merge 或临时 worktree 操作。
 - `integration` 复用既有源提交且无需创建新提交时，只冻结和复验提交范围，不要求提交信息预览。
