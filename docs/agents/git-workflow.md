@@ -1,7 +1,8 @@
 # Git 工作流
 
-本文只规定 Git 状态保护、暂存和本地交付；请求语义和变更门禁分别见
-[`request-boundary.md`](request-boundary.md) 与 [`execution-safety.md`](execution-safety.md)。
+本文只规定 Git 状态保护、暂存和本地交付；请求语义、Mutation Gate 和 protected 以
+[`request-boundary.md`](request-boundary.md) 为准，plan/history 生命周期以
+[`README.md`](README.md) 为准。
 
 ## 基本安全
 
@@ -12,10 +13,12 @@
 
 ## Git 交付顺序
 
-1. 第一次写入前记录 `initial_head`、初始 staged/unstaged/untracked 路径、冲突、任务允许路径，
-   并为任务相关现有内容保留分层 diff 或内容摘要，不能仅凭路径推断归属。
-2. 主 Agent 根据请求边界确定 `delivery_authorization`，根据执行安全规则判断是否进入 protected。
-   自动提交资格失败不能用于否决用户明确授权的 staged-only 提交。
+1. implementation 使用首次写入前冻结的 HEAD、索引、工作树、冲突、允许路径和内容归属判断
+   交付安全；只读开始的显式 staged 交付或复用已有提交的 integration，在准备交付时建立同等内容
+   的只读基线。
+2. 完成最终审查和验证后按操作冻结交付范围。自动交付时，`expected_commit_paths` 逐一列出本任务
+   实际产生且归 Agent 所有的每个改动路径，不遗漏、不混入用户原有内容，且全部属于
+   `task_allowed_paths`。自动提交资格失败不能用于否决用户明确授权的 staged-only 提交。
 3. 所有实现和其他写入 Agent 完成后，主 Agent 冻结 `agent_owned_paths`、`expected_commit_paths`
    和最终验证结果，再串行调用 `git-delivery`。
 4. `commit` 与 `auto-local-commit` 操作使用实际加载的 `git-commit` Skill；`integration` 操作使用
