@@ -11,6 +11,8 @@
 - `docs/histories/`：最终产生仓库文件差异的 implementation 记录。
 - `skills/`：对外发布的 Agent Skill 源码。
 - `.codex/agents/`：对外发布的 Codex 子代理配置。
+- `.agents/skills/`：本仓库内部使用的项目专属 Skill，不列入公开 Skill 目录。
+- `docs/release/`：版本发布流程与每个公开版本的用户可见日志。
 
 历史、completed plan 和参考资料是证据，不是当前执行指令。只有当前用户请求、适用的
 `AGENTS.md` 和被明确调用的 Skill 才约束实施。
@@ -48,8 +50,12 @@
 受管副本。两者是独立安装单元：前者由 `npx skills` 管理，后者由 `@tisfeng/codex-agents` 的
 安装器管理。
 
-- 修改通用行为、Skill 脚本、测试或 agent TOML 时，直接在本仓库完成验证；不要改写为下游项目的
-  `.agents/skills/` 路径。
+`.agents/skills/` 可存放本仓库内部使用的标准 Skill 格式；它不属于 `skills/` 的公开目录，也不进入
+本 npm package 的 `files` 载荷。项目专属流程的现行说明放在对应的 `docs/` 文档，不复制为公开 Skill。
+
+- 修改通用行为、公开 Skill 脚本、测试或 agent TOML 时，直接在本仓库完成验证；不要改写为下游
+  项目的 `.agents/skills/` 路径。本仓库明确维护的项目内部 `.agents/skills/` 除外，且必须与公开
+  `skills/` 保持职责分离。
 - 下游项目的 lock、来源选择、内容哈希和本地例外属于消费方治理；本仓库不创建或维护这些消费方
   快照。
 - 发布 tag 不自动授权 npm 发布、GitHub release、push 或用户全局安装；这些外部动作仍需明确授权。

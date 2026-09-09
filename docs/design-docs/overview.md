@@ -17,6 +17,9 @@
       ├─ docs/agents/：当前专题规则
       ├─ skills/<name>/SKILL.md：按需调用的工作流源码
       └─ .codex/agents/<name>.toml：可委派的专用子代理源码
+
+项目内专属能力使用 `.agents/skills/<name>/SKILL.md`；发布流程和版本日志集中在 `docs/release/`，
+不列入公开 Skill 目录或 npm package 载荷。
 ```
 
 | 位置 | 权威内容 | 主要用途 |
@@ -30,6 +33,8 @@
 | `docs/design-docs/` | 长期设计理由 | 记录为什么采用重要边界或策略 |
 | `docs/exec-plans/` | 执行过程 | 记录获准工作的目标、风险、进度和验证 |
 | `docs/histories/` | 完成结果 | 记录已落地变更及其关键背景 |
+| `.agents/skills/` | 项目内部 Skill | 提供当前仓库专属的标准 Skill 格式工作流 |
+| `docs/release/` | 发布流程和日志 | 说明发布步骤，并保存每个公开版本的 Release 正文 |
 
 `skills/` 是 `npx skills add` 识别的 Skill 源码；`.codex/agents/` 是 Codex 原生发现的项目级
 子代理配置。两者共用仓库 tag，但安装、lock 和升级逻辑各自独立。`bin/codex-agents.mjs` 从指定
