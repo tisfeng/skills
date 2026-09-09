@@ -20,6 +20,8 @@ helper 只接受指向 `github.com` 的 SSH 或 HTTPS remote，并按以下顺�
    `<owner>:<branch>` 作为 `gh` 的 head 参数。
 
 显式参数只解决歧义，不能绕过 remote URL、fork 网络和 GitHub 返回身份的校验。
+同次拓扑发现中，显式 repository 与已查询的 remote repository 相同时复用元数据；每次
+`plan` 或 `apply` 调用重新发现，不跨调用缓存，也不省略写入前后的状态校验。
 
 ## 分支决策
 
