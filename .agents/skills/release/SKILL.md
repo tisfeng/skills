@@ -1,12 +1,13 @@
 ---
 name: release
-description: 发布当前 skills 仓库的版本；用于明确的“发布版本 X.Y.Z”、发布预检或发布续办，不用于普通 Git 提交。
+description: 管理本仓库版本的发布、预检与续办；用于明确的“发布版本 X.Y.Z”，不用于普通 Git 提交。
 ---
 
 # 发布版本
 
-仅用于当前仓库的 `@tisfeng/codex-agents` 发布。它是项目内 Skill，不是 `skills/` 目录中可复用的
-公开 Skill。执行前阅读 [发布流程](../../../docs/release/overview.md)；具体版本的发布日志位于
+用于发布本仓库的新版本，覆盖版本号、发布日志、Git tag、npm 包与 GitHub Release。
+
+执行前阅读 [发布流程](../../../docs/release/overview.md)；各版本的发布日志位于
 [`docs/release/changelog/`](../../../docs/release/changelog/README.md)。
 
 ## 请求语义
