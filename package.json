@@ -1,6 +1,6 @@
 {
   "name": "@tisfeng/codex-agents",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Install versioned Codex custom-agent configurations from Git sources.",
   "repository": {
     "type": "git",
