@@ -25,6 +25,13 @@
    实际加载的 `worktree-rebase-merge` Skill。找不到所需 Skill 时 fail closed，不改用缩减流程。
 5. 需要创建提交时先执行只读 `prepare`，在主对话展示提交信息预览，再由同一交付 Agent 执行
    `apply`。普通预览不是新的确认门槛；只有用户要求确认、仅预览或暂缓时才等待批准。
+6. 已有提交的 `integration` 满足 `worktree-rebase-merge` 一次委派条件时，使用
+   `phase=integrate`，让同一 Agent 检查通过后直接执行；无需先返回 prepare 再派 apply。
+
+委派优先使用 `fork_turns="none"`，传递已确认的 operation/phase、有效授权与限制、仓库和
+实际 Skill 路径、初始及冻结快照、允许范围、验证结果及必要规则入口。需要新提交时补齐精确
+候选和暂存策略；已有提交时传递目标及允许集成的提交/路径限制。不继承整段调查对话，不省略
+仍有效的用户限制；子代理仍读取适用规则，同一轮已读且未变化的内容可复用。
 
 ## 通用 Git 交付子代理
 
@@ -44,10 +51,15 @@
 - `commit` 和 `auto-local-commit` 只执行 `git-commit`；只有 `integration` 授权才允许执行
   `worktree-rebase-merge` 明示的分支、rebase、merge 或临时 worktree 操作。
 - `integration` 复用既有源提交且无需创建新提交时，只冻结和复验提交范围，不要求提交信息预览。
+- `integrate` 在一次委派内完成只读检查、冻结、即时复验和集成。条件不满足时按 Skill 返回
+  `needs-prepare` 或 protected；不自行扩大为新提交、冲突修复或改变范围。
 - 配置、授权、模型、范围、HEAD、索引、冲突、目标 worktree 或验证不确定时进入 protected。
 - 若本轮正在更新 `git-delivery` 配置且运行时尚不能重新发现它，只可按 TOML 中完全相同的模型、
   推理强度、权限和指令启动 bootstrap fallback；无法精确复现时 fail closed。
 - 完成后主 Agent 独立核验提交哈希、实际信息、分支、最终工作树和未 push 状态。
+- 已知受限写入位置时按对应 Skill 直接申请必要提权，复用已确认的权限边界；拒绝后保留现场。
+  完整回执数据由执行者一次收集，主 Agent 批量核验后按既有模板呈现，保留全部字段、统计表和
+  实际提交信息。
 
 ## 自动本地提交条件
 
