@@ -49,7 +49,9 @@ apply 先 fetch 精确 base ref，再要求 `<base-remote>/<base>` 是 HEAD 的�
 
 ## 模板优先的正文契约
 
-PR 标题使用 Angular-style `type(scope): subject`。
+`plan`、默认和 `draft` 均依据用户请求、目标仓库规则、真实提交范围与 diff 起草正文。
+PR 标题使用 Angular-style `type(scope): subject`，说明主要行为。Summary 解释实际改动及原因；
+Verification 只列出实际执行的检查及结果；Issue 仅使用用户提供或有明确证据的引用。
 
 目标仓库模板优先保留原有标题、顺序、非占位说明和 checklist。以下语义标题会接收调用方
 提供的内容：
@@ -81,7 +83,9 @@ Verification、Issue 和 Screenshots 内容均可见。`--extra-body-file <path|
 
 `--issue-policy` 决定 GitHub 自动关闭引用的约束：
 
-- `neutral`：helper 不生成 closing keyword，也不对模板和提交历史施加额外限制。
+- `neutral`（默认）：调用 Agent 不主动生成 `Fixes`、`Closes`、`Resolves` 等自动关闭语法；
+  允许目标仓库模板或用户显式附加正文包含该语法。helper 不生成 closing keyword，也不对模板
+  和提交历史施加额外限制。
 - `allow`：显式表明目标工作流允许 closing keyword。
 - `forbid`：扫描正文和 base..HEAD 的完整提交信息，并在创建后要求
   `closingIssuesReferences == []`。
