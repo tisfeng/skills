@@ -34,10 +34,9 @@ description: 完成 worktree 变更：必要时为 detached checkout 创建 Conv
   并要求用户指定或确认目标分支。
 - 将当前 checkout 视为源分支。如果处于 detached 状态，继续前先创建源分支。
 - 除非用户明确要求，否则不要 fetch、pull 或 push。
-- 创建源提交时完整复用 `git-commit` 的 **暂存决策**：已有索引使用 `existing-index`，显式路径范围
-  使用 `explicit-paths`。本 skill 的明确 `integration` 调用属于显式交付：初始索引为空、未限定路径且
-  未禁止暂存时使用 `explicit-worktree-once`；自动本地提交仍只可使用 `auto-exact`。预检冻结未暂存 raw
-  patch、任务相关未跟踪文件摘要和候选路径，写入前后任一状态漂移均停止，不得再次暂存扩大或修正范围。
+- 创建源提交时使用 `git-commit` 的 **准备与暂存**、**先确定模式** 和 **提交与可见预览**。
+  明确调用本 Skill 属于显式集成交付；空索引按该 Skill 选择允许的暂存范围，不另设停止规则。
+  仅预览或只读时不创建分支、worktree、消息文件，也不暂存或执行 rebase/merge。
 
 ## 预检
 
@@ -89,7 +88,7 @@ description: 完成 worktree 变更：必要时为 detached checkout 创建 Conv
 ## 目标分支直接提交
 
 - 仅当当前源分支与解析出的目标分支是同一分支时，使用直接提交模式。
-- 在直接提交模式下，遵循 `git-commit` Skill 的 **暂存决策**、提交信息
+- 在直接提交模式下，遵循 `git-commit` Skill 的 **准备与暂存**、提交信息
   起草、提交执行、权限重试和清理规则。
 - 不创建临时源分支，不运行 `git rebase` 或 `git merge`，不查找目标 worktree，
   不创建临时目标 worktree，也不 fetch、pull 或 push。
@@ -99,21 +98,13 @@ description: 完成 worktree 变更：必要时为 detached checkout 创建 Conv
 
 ## 提交源分支
 
-- 对源变更，使用 `git-commit` 机制及其 **暂存决策**。提交信息起草、提交
+- 对源变更，使用 `git-commit` 的提交与校验流程。提交信息起草、提交
   执行、权限重试和清理由该 Skill 负责。在普通 rebase/merge 模式下，待 rebase 和 merge 完成后
   合并输出提交回执与集成结果；字段、统计表和实际提交信息仍以 `git-commit` 的
   **Post-Commit Report** 为唯一权威来源。
 - 提交步骤前记录源 `HEAD`。只有提交步骤改变 `HEAD` 时，才将源结果分类为
   `created-this-run`；否则，如果源已经提交且干净，则分类为
   `preexisting-source-commit`。
-- 创建 `commit_message.txt` 或运行 `git commit -F commit_message.txt` 前，发送一条
-  普通 assistant 消息，使用固定标题 `提交信息预览`，并在 `text` 代码围栏中包含
-  完整的实际拟定提交信息。
-- 除 Markdown 代码围栏外，预览文字必须与之后的 `commit_message.txt` 内容完全一致。
-  它不能只出现在工具输出、终端输出、隐藏推理、日志文件、`commit_message.txt` 或
-  最终 Git 命令输出中。
-- 正文预览可见后自动继续，除非用户明确要求确认、仅预览、仅草稿、不提交或修改
-  提交信息。
 - 如果 `git-commit` 报告没有可提交内容，只有源 worktree 不含未提交变更时才继续，
   并将结果标记为 `preexisting-source-commit`；否则停止并报告未提交状态。
 - 提交步骤后重新运行 `git status --short`。除非用户明确另行决定，只从干净的源

@@ -16,17 +16,20 @@
 
 1. 明确的禁止、条件和范围限制优先，并持续有效，直到用户撤销或替换。
 2. “执行”“修改”“修复”“落地”等明确表达授权 implementation。
-3. “先给方案”“检查”“审查”“解释”“研究”等默认保持 planning；方案交付后需要新的
-   implementation 请求才能写入。
-4. 仍有歧义时保持 planning，不自行扩大为写入或外部副作用。
+3. 明确调用 `review-pr` 审查 PR 时，允许该 Skill 规定的有限 Git 准备；纯方案、解释及显式
+   只读限制仍优先。这不授权产品修复、自动提交、线程 resolve 或 push。
+4. “先给方案”“检查”“审查”“解释”“研究”等默认保持 planning；除上述有限准备外，
+   方案交付后需要新的 implementation 请求才能写入。
+5. 仍有歧义时保持 planning，不自行扩大为写入或外部副作用。
 
 | 维度 | 取值 | 含义 |
 | --- | --- | --- |
-| `intent_mode` | `planning` / `implementation` | 是否授权改变工作树、artifact 或外部状态 |
+| `intent_mode` | `planning` / `implementation` | 是否授权实施任务变更；PR review 的有限准备按上述例外处理 |
 | `delivery_authorization` | `none` / `auto-local-commit` / `commit` / `integration` / `push` | 当前获授权的交付操作类别；这些取值不是递增等级 |
 | `safety_state` | `normal` / `protected` | 当前操作能否安全继续 |
 
-planning 只读取、搜索、检查、诊断、起草和报告，不创建 active plan。implementation 默认使用
+planning 只读取、搜索、检查、诊断、起草和报告，不创建 active plan；明确调用 `review-pr` 时的
+有限准备是上述例外，仍不进入自动交付。implementation 默认使用
 `delivery_authorization=auto-local-commit`；仍有效的禁止提交、仅预览或暂缓交付要求将其设为
 `none`。明确请求提交、集成、创建 PR 或发布时，按对应工作流确定必要副作用，不能把
 implementation 扩大为 push、pull、rebase 或 merge。

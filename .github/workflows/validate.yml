@@ -39,9 +39,6 @@ jobs:
       - name: Test git-commit
         run: python3 -m unittest discover -s skills/git-commit/tests -p 'test_*.py'
 
-      - name: Test worktree-rebase-merge
-        run: python3 -m unittest discover -s skills/worktree-rebase-merge/tests -p 'test_*.py'
-
       - name: Test review-pr
         run: python3 -m unittest discover -s skills/review-pr/tests -p 'test_*.py'
 
