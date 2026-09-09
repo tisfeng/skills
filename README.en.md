@@ -27,7 +27,6 @@ This repository is part of the agent development workflow for [Easydict](https:/
 | [`planner`](.codex/agents/planner.toml) | Analyze requirements, evidence, and tradeoffs in read-only mode and recommend an implementation plan |
 | [`reviewer`](.codex/agents/reviewer.toml) | Review a specified snapshot in read-only mode and report evidence-backed defects and suggested fixes |
 | [`tester`](.codex/agents/tester.toml) | Write behavioral tests within the authorized scope and run targeted validation |
-| [`git-delivery`](.codex/agents/git-delivery.toml) | Serially perform authorized local commits and worktree integration without pushing |
 
 A project's own `AGENTS.md`, build and validation configuration, and explicit user instructions take precedence over this repository's defaults. Skills and custom agents perform remote operations such as pushing, merging, publishing, or commenting only with explicit user authorization and when the applicable workflow conditions are satisfied.
 
@@ -84,6 +83,14 @@ Update global Skills and custom agents:
 npx skills update --global
 npx @tisfeng/codex-agents update --global
 ```
+
+The `git-delivery` source has been removed; the current model handles Git delivery directly through
+its Skills. The installer does not remove old agents automatically. Before updating, delete
+`agents/git-delivery.toml` from the relevant installation directory and remove `git-delivery` from
+the `agents` object in `agents-lock.json`. To defer cleanup, update only the remaining agents with
+`npx @tisfeng/codex-agents update --agent planner --agent reviewer --agent tester` (add `--global`
+for a global installation). Select only installed agents; an update without selectors fails if its
+source has removed the agent while its old lock entry remains.
 
 If a custom-agent TOML was modified locally, the installer refuses to overwrite a file whose hash differs from the lock file. After confirming the replacement, append `--force` to the relevant `add` or `update` command.
 

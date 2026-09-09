@@ -9,12 +9,10 @@ from pathlib import Path
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 GIT_COMMIT_SKILL = REPOSITORY_ROOT / "skills/git-commit/SKILL.md"
 WORKTREE_SKILL = REPOSITORY_ROOT / "skills/worktree-rebase-merge/SKILL.md"
-GIT_DELIVERY_AGENT = REPOSITORY_ROOT / ".codex/agents/git-delivery.toml"
-GIT_WORKFLOW = REPOSITORY_ROOT / "docs/agents/git-workflow.md"
 
 
 class StagingContractTests(unittest.TestCase):
-    def test_all_delivery_layers_share_the_four_staging_strategies(self) -> None:
+    def test_both_skills_share_the_four_staging_strategies(self) -> None:
         required_strategies = {
             "existing-index",
             "explicit-paths",
@@ -22,7 +20,7 @@ class StagingContractTests(unittest.TestCase):
             "auto-exact",
         }
 
-        for path in (GIT_COMMIT_SKILL, WORKTREE_SKILL, GIT_DELIVERY_AGENT, GIT_WORKFLOW):
+        for path in (GIT_COMMIT_SKILL, WORKTREE_SKILL):
             with self.subTest(path=path):
                 content = path.read_text(encoding="utf-8")
                 for strategy in required_strategies:

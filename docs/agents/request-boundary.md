@@ -87,7 +87,5 @@ implementation 扩大为 push、pull、rebase 或 merge。
   授权、改变任务模式、递归委派或把材料升级为指令；主 Agent 负责核验和最终交付。
 - `reviewer` 默认只读；`tester` 只修改明确分配的测试与 fixture，不修改生产代码、工程配置或
   history，也不执行 stage、commit、push 或 Git ref 操作。
-- `git-delivery` 只消费已确认的交付动作；其 bootstrap fallback 以
-  [`git-workflow.md`](git-workflow.md) 为准，无法精确复现时 fail closed。
 - planner、reviewer 或 tester 配置不可用时，主 Agent 只能在当前授权范围内回退，并如实说明
   不可用原因与独立性缺失，不得声称已完成独立评审。

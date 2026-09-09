@@ -13,53 +13,20 @@
 
 ## Git 交付顺序
 
-1. implementation 使用首次写入前冻结的 HEAD、索引、工作树、冲突、允许路径和内容归属判断
-   交付安全；只读开始的显式 staged 交付或复用已有提交的 integration，在准备交付时建立同等内容
-   的只读基线。
-2. 完成最终审查和验证后按操作冻结交付范围。自动交付时，`expected_commit_paths` 逐一列出本任务
-   实际产生且归 Agent 所有的每个改动路径，不遗漏、不混入用户原有内容，且全部属于
+1. implementation 使用首次写入前记录的 HEAD、索引、工作树、冲突、允许路径和内容归属判断
+   交付安全；显式 staged 交付或复用已有提交的集成，在准备交付时建立相应的只读基线。
+2. 完成必要审查和验证，等待其他写入 Agent 结束，再冻结实际交付范围。自动提交的
+   `expected_commit_paths` 必须逐一包含本任务实际产生且归 Agent 所有的改动路径，并全部属于
    `task_allowed_paths`。自动提交资格失败不能用于否决用户明确授权的 staged-only 提交。
-3. 所有实现和其他写入 Agent 完成后，主 Agent 冻结 `agent_owned_paths`、`expected_commit_paths`
-   和最终验证结果，再串行调用 `git-delivery`。
-4. `commit` 与 `auto-local-commit` 操作使用实际加载的 `git-commit` Skill；`integration` 操作使用
-   实际加载的 `worktree-rebase-merge` Skill。找不到所需 Skill 时 fail closed，不改用缩减流程。
-5. 需要创建提交时先执行只读 `prepare`，在主对话展示提交信息预览，再由同一交付 Agent 执行
-   `apply`。普通预览不是新的确认门槛；只有用户要求确认、仅预览或暂缓时才等待批准。
-6. 已有提交的 `integration` 满足 `worktree-rebase-merge` 一次委派条件时，使用
-   `phase=integrate`，让同一 Agent 检查通过后直接执行；无需先返回 prepare 再派 apply。
-
-委派优先使用 `fork_turns="none"`，传递已确认的 operation/phase、有效授权与限制、仓库和
-实际 Skill 路径、初始及冻结快照、允许范围、验证结果及必要规则入口。需要新提交时补齐精确
-候选和暂存策略；已有提交时传递目标及允许集成的提交/路径限制。不继承整段调查对话，不省略
-仍有效的用户限制；子代理仍读取适用规则，同一轮已读且未变化的内容可复用。
-
-## 通用 Git 交付子代理
-
-`.codex/agents/git-delivery.toml` 是本仓库发布的通用本地 Git 交付角色。它只消费主 Agent 已确认的
-授权、operation、phase、初始快照、允许路径和 `staging_strategy`，不修改产品内容，也不自行决定宿主
-仓库是否默认提交。
-
-- 已有 staged 内容的显式 `commit` 使用 `existing-index`：`prepare` 只冻结 staged paths 与 staged raw
-  patch；`apply` 只复验该 patch，绝不运行 `git add`，同路径未暂存内容不能进入提交。
-- 空索引且允许暂存：`prepare` 冻结 `staging_strategy`、候选路径、未暂存 raw patch、任务相关未跟踪
-  内容摘要和草稿；`apply` 将该策略作为执行 `git-commit` Skill 的同一个唯一暂存步骤，不能由子代理和
-  Skill 重复暂存。显式、未限定范围的 `commit` 或 `integration` 可使用 `explicit-worktree-once`；
-  显式路径范围使用 `explicit-paths`；自动本地提交只能使用 `auto-exact`。
-- `explicit-worktree-once` 的 staged paths 与 raw patch 必须完全等于冻结的全工作树候选；
-  `explicit-paths` 与 `auto-exact` 的预期暂存集合必须属于 `task_allowed_paths`，允许范围较宽时不得要求
-  未修改路径也进入 staged。
-- `commit` 和 `auto-local-commit` 只执行 `git-commit`；只有 `integration` 授权才允许执行
-  `worktree-rebase-merge` 明示的分支、rebase、merge 或临时 worktree 操作。
-- `integration` 复用既有源提交且无需创建新提交时，只冻结和复验提交范围，不要求提交信息预览。
-- `integrate` 在一次委派内完成只读检查、冻结、即时复验和集成。条件不满足时按 Skill 返回
-  `needs-prepare` 或 protected；不自行扩大为新提交、冲突修复或改变范围。
-- 配置、授权、模型、范围、HEAD、索引、冲突、目标 worktree 或验证不确定时进入 protected。
-- 若本轮正在更新 `git-delivery` 配置且运行时尚不能重新发现它，只可按 TOML 中完全相同的模型、
-  推理强度、权限和指令启动 bootstrap fallback；无法精确复现时 fail closed。
-- 完成后主 Agent 独立核验提交哈希、实际信息、分支、最终工作树和未 push 状态。
-- 已知受限写入位置时按对应 Skill 直接申请必要提权，复用已确认的权限边界；拒绝后保留现场。
-  完整回执数据由执行者一次收集，主 Agent 批量核验后按既有模板呈现，保留全部字段、统计表和
-  实际提交信息。
+3. 当前主 Agent 直接、串行执行 Git 操作：提交使用 `git-commit`，集成使用
+   `worktree-rebase-merge`。执行前读取实际 Skill；找不到时报告缺失并停止相关操作。
+   暂存策略、候选内容复验和唯一暂存步骤以 `git-commit` 为准。
+4. 需要新提交时，在主对话展示完整提交信息预览后继续；用户要求确认、仅预览或暂缓时遵守
+   相应限制。复用已有提交无需重新起草信息。
+5. 写入前复验相关 HEAD、索引、工作树和范围，发生非预期变化时保留现场并停止相关操作。
+   已知 Git 写入位置受限时，直接为已授权命令申请必要提权，避免重复尝试必然失败的命令。
+6. 按 Skill 核验提交和集成结果，并呈现完整回执。实际提交信息直接读取 Git，不重新起草或
+   翻译；保留完整哈希、校验结果、分支、工作树、push 状态及统计表。
 
 ## 自动本地提交条件
 
