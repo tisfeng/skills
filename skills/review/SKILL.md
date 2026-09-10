@@ -26,6 +26,71 @@ description: 审查本地任务变更、工作树、提交或提交范围，以�
 
 路径限制约束修改及报告范围，不禁止为判断问题读取必要调用链。不要扩大为无边界的全库审计。
 
+## 快速执行协议
+
+按“收集冻结快照、语义审查与针对性验证、最终复验和报告”组织正常路径。保留完整审查范围、
+raw patch 与报告契约；工具轮次是优化指标，不是跳过证据或提前结束的硬上限。
+
+- 唯一 parent 的单提交或语义明确的 range，直接批量预检；parent、范围或归属有歧义时再处理
+  具体缺口。不要在取得实际 diff 前反复规划假设性缺陷。
+- 支持程序化工具编排时，在一次调用内并行无依赖读取；依赖 SHA 解析的步骤等待成功后执行。
+  命令必须明确完成且退出码为 0 才接受结果，运行中会话继续等待，不重复启动。
+- 已加载且在有效上下文中的 Skill、规则和冻结证据直接复用。raw diff 完整读取一次；较大时
+  分页并记录覆盖区间。读过 diff 后不默认再打印全部完整文件，按调用链、错误路径或候选问题
+  补足上下文；行号只补读相关片段。压缩后证据确实丢失时允许针对性重读，不凭摘要编造证据。
+- 验证命令及范围确定后，按授权并行无共享写入冲突的检查。相同快照、命令及相关环境的有效
+  测试记录可复用并注明来源；新变更、失败、疑点或证据缺口影响结论时重新运行。语义审查仍
+  独立完成，绿色测试不能替代审查。完成必要检查后收集最终状态并报告，不无条件扩大验证。
+
+### commit/range 只读快照
+
+`<review-skill-dir>` 是实际加载的本 Skill 目录。对 commit/range 优先运行：
+
+```bash
+python3 "<review-skill-dir>/scripts/collect_review_snapshot.py" --repo <repo-root> --commit <ref>
+python3 "<review-skill-dir>/scripts/collect_review_snapshot.py" --repo <repo-root> --range '<A>..<B>'
+python3 "<review-skill-dir>/scripts/collect_review_snapshot.py" --repo <repo-root> --range '<A>...<B>'
+```
+
+三条是不同输入的示例，不需全部执行。merge commit 必须明确 `--parent <1-based-number>`；root
+commit 对比空树。`--path <repo-relative-path>` 可重复，用于字面路径过滤，不支持 glob/pathspec
+魔法，也不接受路径穿越。工作树、任务归属、文件/模块和 PR 模式仍按原有快照规则执行。
+
+helper 只读本地 Git 对象；不写索引、ref 或对象，不自动 fetch。接受 `schema_version: 1` 且
+命令成功的结果，冻结 `snapshot` 中的完整端点和 `fingerprint`，检查 `changes` 与 `patch`。
+其中 `A..B` 表示端点树差异，`A...B` 使用唯一 merge-base；缺失对象、merge parent 歧义或多重
+merge-base 均停止该快照，不能默默选基线。helper 不可用时，按本节同等范围用 Git 命令收集，
+仍需明确 parent、冻结端点、完整读取 diff 并在结束前复验，不把摘要或失败输出当成功。
+
+`patch` 默认至多返回 24000 个字符，包含完整 patch 的 SHA-256、总字节数、总字符数、当前
+`offset/end` 和 `next_offset`。有后续页时，用返回的完整 SHA 固定原 commit/range 及 parent、
+路径参数，传入 `--patch-offset <next_offset>` 续读，可用 `--patch-chars <count>` 调整每页大小。
+分页期间不传 `--expected-fingerprint`，否则未变内容会省略。只有所有页的 fingerprint/patch
+哈希一致，且区间连续覆盖 `[0, total_chars)`，才算读完；工具层截断时缩小页大小重新读取。
+`patch.complete` 只表示本次返回整份 patch，最后一页不代表之前页已经审查。
+JSON 使用 UTF-8/surrogateescape 无损表示原始字节，特殊路径由 NUL 分隔记录解析；二进制 patch、
+删除、rename 和 mode 变化保留为证据，语义或视觉验证不足时另行说明。
+
+最后以原输入引用与相同 parent、路径参数再次调用，附加：
+
+```text
+--expected-fingerprint <initial-fingerprint>
+```
+
+`state: unchanged` 只省略未变的路径清单和 patch；`changed` 返回新快照与 patch，需检查增量。
+固定 SHA 指向的对象不随 HEAD 移动而变化，原输入是分支时复验该分支的最新解析结果。返回的
+`checkout` 独立描述当前 HEAD 和脏状态，不属于提交 fingerprint；status 摘要不是文件内容哈希。
+补读历史源码应使用 `git show <frozen-sha>:<path>`。运行当前 checkout 的测试前必须证明相关源码、
+测试及配置匹配所审查提交；HEAD 不同或相关内容有修改时不能把测试结果归属给历史提交。helper
+不替代测试前后内容一致性检查，也不证明语义审查已经完成。
+
+### 外部依赖调查
+
+每次资料检索对应具体的行为疑问、缺少的证据以及它对审查结论的影响。优先检查本地实现、测试、
+依赖版本和可用帮助；需要核实外部契约时，查权威文档或对应版本源码，并按问题选取必要片段。
+后续查询应能填补具体缺口或跟进新线索，避免连续搜索同义关键词并回传大量无关结果。仍不能
+确认时说明有实质影响的验证限制，不把猜测当 finding。必要检索不受固定次数或优先级门槛限制。
+
 ## 审查与报告契约
 
 根据目标检查真实实现、调用者和相关测试。优先正确性、数据安全、并发、错误路径、

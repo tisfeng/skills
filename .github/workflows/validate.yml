@@ -45,6 +45,9 @@ jobs:
       - name: Test review-pr
         run: python3 -m unittest discover -s skills/review-pr/tests -p 'test_*.py'
 
+      - name: Test review
+        run: python3 -m unittest discover -s skills/review/tests -p 'test_*.py'
+
       - name: Test submit-pr
         run: python3 -m unittest discover -s skills/submit-pr/tests -p 'test_*.py'
 
