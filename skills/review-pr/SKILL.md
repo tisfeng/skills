@@ -2,14 +2,14 @@
 name: review-pr
 description: >
   默认在本地分支准备 GitHub pull request；明确要求时使用隔离 worktree，并可选择
-  合并最新 base 分支。复用 review 核心审查准确远程代码，并维护有证据的线程状态；
+  合并最新 base 分支。理解 PR 和关联 issue 的目标，复用 review 核心核对功能与代码正确性，并维护有证据的线程状态；
   用户要求只读时禁用远程写入。适用于 GitHub PR review。
 ---
 
 # PR Review 工作流
 
 先读取通用核心 [`review`](../review/SKILL.md)。本 skill 只补充 GitHub 上下文、准备、
-线程维护和 PR 报告；本地工作树、提交、文件或模块 review 直接使用核心，不要求 PR。
+问题背景、线程维护和 PR 报告；本地工作树、提交、文件或模块 review 直接使用核心，不要求 PR。
 
 下文的 `<review-pr-skill-dir>` 表示当前加载的 `review-pr/SKILL.md` 所在目录。
 运行随 skill 分发的脚本时，先解析该实际目录；不要假设 skill 安装在某个固定的
@@ -82,8 +82,8 @@ worktree、latest-base 合并与冲突修复仍按下文对应条件单独判断
 优化正常成功路径的模型往返和重复输出，不减少必要远程证据、diff 审查、线程分页、漂移检查、
 权限边界或最终刷新。已经加载且本轮没有变化的本 Skill、`review` 核心和引用文件不重复读取。
 
-- 首次快照使用一个 helper 先冻结 PR 元数据和 head，再并行收集完整分页的 threads/replies 与
-  checks，一次向模型返回完整证据及稳定 fingerprint：
+- 首次快照使用一个 helper 先冻结 PR 元数据和 head，再并行收集直接关联的 issue 正文、
+  完整分页的 threads/replies 与 checks，一次向模型返回证据、覆盖状态及稳定 fingerprint：
 
   ```bash
   python3 "<review-pr-skill-dir>/scripts/review_snapshot.py" collect \
@@ -94,6 +94,8 @@ worktree、latest-base 合并与冲突修复仍按下文对应条件单独判断
   0 退出时才接受结果。checks 查询使用已冻结 head 作为前置锚点并在查询后复验，不能把其他提交
   的绿色 CI 绑定到当前快照。helper 不可用时按下文 **手动快照回退**执行，不得降低证据范围。
   helper 已检测到 head 或身份不一致时，本轮快照无效；重新采集，不能通过手动回退绕过检查。
+  `pr.reviewContext` 保存问题来源，不代表已经理解需求或验证功能；缺失时按下文补齐，不能
+  把旧 helper 没有该字段解释为没有关联 issue。`summary.context.coverage` 明示正文覆盖缺口。
 - 支持一次模型调用内编排多个工具时，先并行执行初始远程快照与本地 status。确认本地模式和
   权限后，在一次程序化调用中依次等待准备 helper 的结构化回执和本地 range 取证；准备 helper
   已完成本轮 head/base fetch 与 checkout 校验，不再紧接着重复 fetch 或打印全量分支列表。
@@ -106,7 +108,7 @@ worktree、latest-base 合并与冲突修复仍按下文对应条件单独判断
   重跑覆盖相同范围的本地全量 CI。真实 finding、用户要求、仓库强制验证或远程 checks 未覆盖的
   变更仍运行针对性检查。checks 失败或 pending 是审查状态，不是等待授权；除非用户明确要求，
   不使用 `--watch`，也不等待 CI 完成。
-- 最终刷新仍重新完整读取 PR、threads/replies 和 checks，但以 fingerprint 压缩未变化输出：
+- 最终刷新仍重新读取 PR、选定 issue 证据、完整 threads/replies 和 checks，但以 fingerprint 压缩未变化输出：
 
   ```bash
   python3 "<review-pr-skill-dir>/scripts/review_snapshot.py" refresh \
@@ -139,6 +141,9 @@ worktree、latest-base 合并与冲突修复仍按下文对应条件单独判断
      --json number,title,url,body,baseRefName,baseRefOid,headRefName,headRefOid,headRepository,headRepositoryOwner,isCrossRepository,isDraft,state,mergeable,mergeStateStatus,updatedAt,files,commits,closingIssuesReferences,comments,reviews
    ```
 
+   按 [问题背景与功能核对](references/problem-review.md) 读取直接目标 issue 的正文及已采用的
+   讨论，保留来源身份、覆盖范围和原始内容；初始与最终都比较这些证据，不只比较 PR updatedAt。
+
 2. 再收集完整分页的 threads/replies 与 checks；这两项可并行，但都必须完成后才进入下一步：
 
    ```bash
@@ -165,7 +170,7 @@ helper 检测到漂移时同样适用这一停止条件。支持程序化编排�
 
 ## 工作流
 
-### 1. 收集 PR 元数据
+### 1. 收集 PR 元数据与问题背景
 
 先按 **快速审查协议**运行 `review_snapshot.py collect`，并冻结输出的 head、updatedAt 和
 fingerprints。helper 不可用时先完成 **手动快照回退**，再使用其中的元数据和已绑定 head 的 checks；
@@ -174,6 +179,14 @@ fingerprints。helper 不可用时先完成 **手动快照回退**，再使用�
 记录 head owner、fork 仓库、head 分支、head SHA、base 分支、PR URL、关联 issue、mergeability、
 checks 和完整 thread 快照。
 普通路径下由 helper 脚本添加 remote、fetch 分支并设置 upstream tracking。
+
+语义审查前读取 [问题背景与功能核对](references/problem-review.md)。先理解标题、完整描述和
+实际要解决的 issue，明确原问题、触发场景、期望结果、本 PR 承诺的范围及尚不确定的边界。
+记录来源，区分明确要求、作者声明、已确认决策与推断；不能根据 diff 反推需求并当作验收标准。
+没有 issue 是合法情况；缺少证据只限制相应功能结论，其余安全的代码审查继续。
+
+将目标和关键验收条件连同来源交给 `review`，在同一次审查中核对“验收条件 → 实现/调用路径 →
+验证证据 → 判断”。简单 PR 用短段落即可，复杂 PR 使用短表；脚本不能替代目标提炼和语义判断。
 
 ### 2. 选择分支准备路径
 
@@ -291,11 +304,9 @@ checkout 的分支、HEAD 和文件状态未改变，然后以该 worktree 作�
 review 命令。
 
 初始 helper 或 **手动快照回退**已记录 PR 上下文、comments、reviews 和完整分页的
-review threads，不要紧接着重复查询相同内容。关联 issue 需要额外正文/评论时运行：
-
-```bash
-gh issue view <issue-url-or-number> --comments
-```
+review threads，不要紧接着重复查询相同内容。复用 `pr.reviewContext` 的 issue 正文；存在需求
+争议、复现修订、讨论未覆盖或特定回复引用时，按问题背景协议补读讨论，并把所有采用的来源
+纳入后续 refresh。只读回退查询必须使用准确 issue URL 或显式 repo，不借用当前 fork 猜测身份。
 
 从初始快照记录 `headRefOid`、`updatedAt`、最新 review 的 `submittedAt` 和完整 inline
 review-thread 集合。`comments` 和 `reviews` 字段不包含完整 inline thread 内容，
@@ -373,6 +384,9 @@ fingerprint 时，按 **手动快照回退**重新完整采集；通过最后的
   diff 内容。head 未变且 merge-base、raw patch 与相关上下文未变时复用代码审查；范围变化时
   检查增量并复核已有 finding，不能用旧 base 的结论覆盖新范围。获取新 base 仍受只读/不改变 Git
   限制约束；证据不足时报告限制。latest-base 集成结果保留旧快照身份，不自动 reset 或重做 merge。
+- 即使 head 未变，标题、描述、issue 关联集合、正文或已采用的讨论变化，也须重新核对受影响
+  的目标、验收条件与实现/测试证据。需求未变且 patch 未变时复用既有判断；不能因为代码未变就
+  宣称功能结论仍成立。来源读取失败、旧快照缺失或讨论未覆盖时保留明确限制。
 - 如果出现新的 review、thread、reply 或 resolution/outdated 状态变化，读取其准确
   内容，结合当前 head 和周围代码验证，更新已有评论的对应条目；只有再次 review
   识别出不同的额外问题时才补充独立发现；已有 F 条目按当前证据复核更新。
@@ -385,7 +399,9 @@ fingerprint 时，按 **手动快照回退**重新完整采集；通过最后的
 
 ## Review 重点
 
-检查实现是否真正解决 PR 描述和关联 issue。优先关注 bug、回归、边界情况、并发问题、
+依据已经建立的目标记录，检查实现是否真正解决 PR 描述和关联 issue：从需求检查漏实现、
+原始复现场景与端到端路径，从实现检查无关行为变化和承诺保留的行为。测试断言应对应验收条件，
+绿色 CI、静态推理或仅修复 UI 表象均不等于原问题已解决。优先关注 bug、回归、边界情况、并发问题、
 持久化错误、本地化缺口、平台版本问题、API 契约漂移、缺少验证和无关改动。
 
 用户询问旧 PR 是否仍值得保留时，先给出保留、修改或关闭的建议，再说明代码证据；
@@ -403,7 +419,8 @@ C/F/Q 前缀区分问题来源或类型；数字用于稳定标识问题，不�
 复审缺少上轮证据时只标明本轮确认，不推断首次发现时间。
 复审沿用能对应到同一问题的 ID，不因排序变化重新编号；无旧映射时明确建立本轮编号。
 
-1. **审查结论**：先说明代码审查建议、主要原因及下一步。CI 失败/pending、未完成的
+1. **审查结论**：先分别说明功能目标的满足程度与代码审查建议、主要原因及下一步。功能目标
+   区分已满足、部分满足、明确缺口或证据不足，并说明是静态证据还是实际运行验证。CI 失败/pending、未完成的
    必要验证或最终刷新缺口若影响判断，在开头明确说明；不能把“没有 finding”写成
    “已验证可合并”。复杂报告增加跨来源按风险排序的行动索引，仅列 ID、短标题和动作，
    不重复证据。需要背景才能理解时，先用一句话说明 PR 目标。
@@ -466,7 +483,8 @@ C/F/Q 前缀区分问题来源或类型；数字用于稳定标识问题，不�
 同一远程 Head 只写一次，刷新处说明是否一致；不同快照分别记录。简单报告可合并组别，
 但仍保留适用的最低信息。
 
-- PR 目标、关联 issue、主要变化与重要边界，不只复述 PR 描述。
+- PR 目标、关联 issue、主要变化与重要边界，以及关键验收条件与证据的对应，不只复述 PR 描述。
+  保留需求来源和覆盖限制；推断、用户决策、静态判断和实际验证不得混写。
 - 准确完整远程 head SHA、冻结 base/merge-base；latest-base 本地集成快照单列，
   不替代远程证据。普通本地准备记录分支/upstream；worktree 模式记录其路径、
   分支/upstream 或 local-only 状态，以及源 checkout 是否保持不变。

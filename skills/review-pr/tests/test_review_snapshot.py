@@ -504,6 +504,140 @@ class ReviewSnapshotTests(unittest.TestCase):
             ):
                 review_snapshot.collect_checks("owner/repo", 42, "head-1")
 
+    @staticmethod
+    def with_issue(snapshot):
+        context = snapshot["pr"]["reviewContext"]
+        context["issues"] = [{
+            "repo": "owner/repo", "number": 7, "url": "https://github.com/owner/repo/issues/7",
+            "relations": ["closing"], "read_status": "read",
+            "issue": {"id": "I7", "number": 7, "url": "https://github.com/owner/repo/issues/7",
+                      "title": "Persist settings", "body": "Settings must survive restart",
+                      "state": "OPEN", "updatedAt": "same-time"},
+            "comments": {"status": "complete", "totalCount": 1,
+                         "items": [{"id": "C7", "body": "Apply to all settings", "updatedAt": "same-time"}]},
+        }]
+        context["discussion_issues"] = ["owner/repo#7"]
+        return ReviewSnapshotTests.with_fingerprints(snapshot)
+
+    def test_goal_evidence_changes_refresh_pr_without_head_change(self) -> None:
+        initial = self.with_issue(self.collect())
+        changes = {
+            "title": lambda pr: pr.update(title="A narrower goal"),
+            "description": lambda pr: pr.update(body="Only preserve selected settings"),
+            "issue_body": lambda pr: pr["reviewContext"]["issues"][0]["issue"].update(body="Also persist offline"),
+            "issue_reply": lambda pr: pr["reviewContext"]["issues"][0]["comments"]["items"][0].update(body="Include private mode"),
+            "unlink": lambda pr: pr["reviewContext"].update(issues=[]),
+        }
+        for name, change in changes.items():
+            with self.subTest(change=name):
+                current = copy.deepcopy(initial)
+                change(current["pr"])
+                self.with_fingerprints(current)
+                result = self.refresh(initial, current)
+                self.assertFalse(result["unchanged"])
+                self.assertEqual(result["changed_fields"], ["pr"])
+                self.assertEqual(result["pr"], current["pr"])
+                self.assertNotIn("threads", result)
+                self.assertEqual(result["headRefOid"], initial["headRefOid"])
+
+    def test_collect_binds_issue_body_to_pr_evidence_without_waiting_for_checks(self) -> None:
+        pr = pr_payload()
+        pr["closingIssuesReferences"] = [{"url": "https://github.com/other/project/issues/7"}]
+        issue = {"__typename": "Issue", "id": "I7", "number": 7,
+                 "url": "https://github.com/other/project/issues/7", "title": "Persist settings",
+                 "body": "Settings must survive restart", "state": "OPEN", "updatedAt": "same-time",
+                 "comments": {"totalCount": 3}}
+        with patch.object(review_snapshot, "collect_pr", return_value=pr), patch.object(
+            review_snapshot.review_threads, "collect", return_value=thread_payload()
+        ), patch.object(review_snapshot, "collect_checks", return_value=check_payload(exit_code=8)), patch.object(
+            review_snapshot.review_context, "graphql", return_value={"repository": {"issueOrPullRequest": issue}}
+        ) as graphql:
+            result = review_snapshot.collect_snapshot("owner/repo", 42)
+        self.assertEqual(graphql.call_count, 1)
+        source = result["pr"]["reviewContext"]["issues"][0]
+        self.assertEqual(source["issue"]["body"], issue["body"])
+        self.assertEqual(source["relations"], ["closing"])
+        self.assertEqual(source["comments"]["status"], "not_requested")
+        self.assertEqual(result["summary"]["context"]["coverage"], "bodies_collected")
+        self.assertEqual(result["checks"]["exit_code"], 8)
+        self.assertNotIn("reviewContext", pr)  # Do not mutate cached input metadata in place.
+
+    def test_context_failure_is_not_an_empty_success(self) -> None:
+        initial = self.with_issue(self.collect())
+        current = copy.deepcopy(initial)
+        current["pr"]["reviewContext"]["issues"][0] = {
+            "repo": "owner/repo", "number": 7, "relations": ["closing"],
+            "read_status": "permission_denied", "diagnostic": "HTTP 403",
+        }
+        self.with_fingerprints(current)
+        result = self.refresh(initial, current)
+        self.assertEqual(result["context_coverage"], "partial")
+        self.assertEqual(result["pr"]["reviewContext"]["issues"][0]["read_status"], "permission_denied")
+
+    def test_diagnostic_wording_and_source_order_do_not_invalidate_evidence(self) -> None:
+        initial = self.with_issue(self.collect())
+        another = copy.deepcopy(initial["pr"]["reviewContext"]["issues"][0])
+        another.update(number=8, read_status="read_failed", diagnostic="timeout at 10:00")
+        initial["pr"]["reviewContext"]["issues"].append(another)
+        initial["pr"]["closingIssuesReferences"] = [{"url": "issue/8"}, {"url": "issue/7"}]
+        self.with_fingerprints(initial)
+        current = copy.deepcopy(initial)
+        current["pr"]["reviewContext"]["issues"].reverse()
+        current["pr"]["reviewContext"]["issues"][0]["diagnostic"] = "timeout at 11:00"
+        current["pr"]["closingIssuesReferences"].reverse()
+        self.with_fingerprints(current)
+        result = self.refresh(initial, current)
+        self.assertTrue(result["unchanged"])
+        self.assertEqual(result["context_coverage"], "partial")
+
+    def test_legacy_snapshot_missing_context_requires_new_evidence(self) -> None:
+        current = self.collect()
+        legacy = copy.deepcopy(current)
+        del legacy["pr"]["reviewContext"]
+        self.with_fingerprints(legacy)
+        self.assertEqual(review_snapshot.review_context.coverage(legacy["pr"]), "not_collected")
+        result = self.refresh(legacy, current, previous_snapshot=legacy)
+        self.assertFalse(result["unchanged"])
+        self.assertEqual(result["pr"]["reviewContext"]["schema_version"], 1)
+        self.assertEqual(result["context_coverage"], "bodies_collected")
+
+    def test_refresh_inherits_sources_only_from_reviewed_previous_snapshot(self) -> None:
+        initial = self.with_issue(self.collect())
+        initial["pr"]["reviewContext"]["requested_issues"] = ["other/repo#9"]
+        self.with_fingerprints(initial)
+        arguments = dict(
+            expected_head=initial["headRefOid"], expected_pr_fingerprint=initial["fingerprints"]["pr"],
+            expected_threads_fingerprint=initial["fingerprints"]["threads"],
+            expected_checks_fingerprint=initial["fingerprints"]["checks"],
+        )
+        with patch.object(review_snapshot, "collect_snapshot", return_value=initial) as collect:
+            review_snapshot.refresh_snapshot("owner/repo", 42, previous_snapshot=initial, **arguments)
+        collect.assert_called_once_with("owner/repo", 42, issue_refs=["other/repo#9"], discussion_refs=["owner/repo#7"])
+        tampered = copy.deepcopy(initial)
+        tampered["pr"]["reviewContext"]["requested_issues"] = ["secret/repo#10"]
+        with patch.object(review_snapshot, "collect_snapshot", return_value=initial) as collect:
+            result = review_snapshot.refresh_snapshot("owner/repo", 42, previous_snapshot=tampered, **arguments)
+        collect.assert_called_once_with("owner/repo", 42)
+        self.assertIn("evidence_reset", result)
+
+    def test_selected_evidence_survives_paging_and_preparation_transport(self) -> None:
+        initial = self.with_issue(self.collect())
+        with tempfile.TemporaryDirectory() as directory:
+            path = str(Path(directory) / "context.json")
+            storage_hash = review_snapshot.snapshot_transport.save(path, initial, initial)
+            saved = review_snapshot.snapshot_transport.read(path, storage_hash)["snapshot"]
+            page = review_snapshot.snapshot_transport.page(path, storage_hash, 0, 100000)
+        self.assertEqual(saved["pr"]["reviewContext"], initial["pr"]["reviewContext"])
+        self.assertEqual(json.loads(page["page"]["text"])["pr"]["reviewContext"], initial["pr"]["reviewContext"])
+
+    def test_cli_passes_explicit_goal_and_discussion_sources(self) -> None:
+        current = self.collect()
+        argv = ["review_snapshot.py", "collect", "--repo", "owner/repo", "--pr", "42",
+                "--issue", "other/repo#9", "--issue-comments", "#7"]
+        with patch.object(sys, "argv", argv), patch.object(review_snapshot, "collect_snapshot", return_value=current) as collect, contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(review_snapshot.main(), 0)
+        collect.assert_called_once_with("owner/repo", 42, issue_refs=["other/repo#9"], discussion_refs=["#7"])
+
 
 if __name__ == "__main__":
     unittest.main()

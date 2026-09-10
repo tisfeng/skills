@@ -12,7 +12,7 @@ python3 "<review-pr-skill-dir>/scripts/review_snapshot.py" collect \
   --repo OWNER/REPO --pr NUMBER --snapshot-out <task-temp>/initial.json --page-chars 24000
 ```
 
-helper 仍完整读取远程 PR、所有线程/回复和 checks，保存完整快照及本次报告。文件以 0600 权限
+helper 仍读取远程 PR、直接 issue 正文及选定讨论、所有线程/回复和 checks，保存完整快照及本次报告。文件以 0600 权限
 独占创建，不覆盖已有文件或符号链接，不建立全局缓存。返回 `transport: paged`、完整身份、
 fingerprints、summary、`storage_sha256` 与第一页。先确认成功和身份，再按 `page.next_offset` 续读：
 
@@ -51,6 +51,11 @@ bash "<review-pr-skill-dir>/scripts/prepare-pr-branch.sh" \
 --previous-storage-sha256 <initial-storage-sha256>
 --snapshot-out <task-temp>/refresh-1.json
 ```
+
+问题来源按 [问题背景与功能核对](problem-review.md) 的 `--issue`/`--issue-comments` 选择。
+经过身份、内容与 expected fingerprint 校验的旧快照可恢复这两组选项；否则由调用方重新明确传入。
+`pr.reviewContext` 使用自身 `schema_version: 1`，内容属于已有 PR fingerprint，无需新增第四组
+必填参数。旧快照没有该扩展不代表需求已读；新版首次采集/刷新补齐，相关代码与准备回执仍可复用。
 
 仍必须传入原有三类 expected fingerprint、expected head，以及实际审查的 expected base 名称/SHA。
 每次刷新使用新文件；文件保存完整当前快照，而不仅是差量，供下一次刷新复用。

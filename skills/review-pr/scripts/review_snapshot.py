@@ -20,6 +20,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 import review_threads  # noqa: E402
+import review_context  # noqa: E402
 import snapshot_transport  # noqa: E402
 
 
@@ -53,7 +54,7 @@ def section_fingerprints(pr, threads, checks):
     """Ignore transport order for sets, but retain chronological reply content."""
     thread_set = dict(threads, threads=sorted(threads["threads"], key=lambda item: item["id"]))
     check_set = dict(checks, items=sorted(checks["items"], key=canonical_fingerprint))
-    return {"pr": canonical_fingerprint(pr), "threads": canonical_fingerprint(thread_set),
+    return {"pr": canonical_fingerprint(review_context.fingerprint_content(pr)), "threads": canonical_fingerprint(thread_set),
             "checks": canonical_fingerprint(check_set)}
 
 
@@ -198,7 +199,7 @@ def summarize_checks(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def collect_snapshot(repo: str, number: int) -> dict[str, Any]:
+def collect_snapshot(repo: str, number: int, *, issue_refs=(), discussion_refs=()) -> dict[str, Any]:
     """Anchor the PR identity, then collect independent review facts in parallel."""
 
     started = time.monotonic()
@@ -206,8 +207,11 @@ def collect_snapshot(repo: str, number: int) -> dict[str, Any]:
     expected_head = pr.get("headRefOid")
     if not isinstance(expected_head, str) or not expected_head:
         raise SnapshotError("gh pr view did not return headRefOid")
-    with ThreadPoolExecutor(max_workers=2) as executor:
+    with ThreadPoolExecutor(max_workers=3) as executor:
         futures = {
+            "context": executor.submit(
+                measured, lambda: review_context.collect(repo, pr, issue_refs, discussion_refs)
+            ),
             "threads": executor.submit(
                 measured, lambda: collect_thread_snapshot(repo, number)
             ),
@@ -219,6 +223,7 @@ def collect_snapshot(repo: str, number: int) -> dict[str, Any]:
 
     threads, threads_ms = results["threads"]
     checks, checks_ms = results["checks"]
+    context, context_ms = results["context"]
     if pr.get("number") != number or threads.get("number") != number:
         raise SnapshotError("PR number changed during snapshot collection")
     if pr.get("headRefOid") != threads.get("headRefOid"):
@@ -228,6 +233,7 @@ def collect_snapshot(repo: str, number: int) -> dict[str, Any]:
     if pr.get("url") != threads.get("url"):
         raise SnapshotError("PR identity changed during snapshot collection; collect again")
 
+    pr = dict(pr, reviewContext=context)
     fingerprints = section_fingerprints(pr, threads, checks)
     return {
         "schema_version": 1,
@@ -242,10 +248,12 @@ def collect_snapshot(repo: str, number: int) -> dict[str, Any]:
         "mergeStateStatus": pr["mergeStateStatus"],
         "fingerprints": fingerprints,
         "summary": {
+            "context": {"coverage": review_context.coverage(pr), "issues": len(context["issues"])},
             "threads": summarize_threads(threads),
             "checks": summarize_checks(checks),
         },
         "timings_ms": {
+            "context": context_ms,
             "pr": pr_ms,
             "threads": threads_ms,
             "checks": checks_ms,
@@ -255,6 +263,26 @@ def collect_snapshot(repo: str, number: int) -> dict[str, Any]:
         "threads": threads,
         "checks": checks,
     }
+
+
+def reviewed_previous(snapshot, repo, number, head, expected):
+    """Validate cached evidence before following any of its extra issue references."""
+    try:
+        return (snapshot["schema_version"] == 1 and snapshot["repo"] == repo
+                and snapshot["number"] == number and snapshot["headRefOid"] == head
+                and section_fingerprints(snapshot["pr"], snapshot["threads"], snapshot["checks"]) == expected)
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
+def collect_selected(repo, number, issues=None, discussions=None, previous=None):
+    """Carry forward explicit source selection only from a validated prior snapshot."""
+    context = (previous or {}).get("pr", {}).get("reviewContext", {})
+    issues = issues if issues is not None else context.get("requested_issues", [])
+    discussions = discussions if discussions is not None else context.get("discussion_issues", [])
+    if not issues and not discussions:
+        return collect_snapshot(repo, number)
+    return collect_snapshot(repo, number, issue_refs=issues, discussion_refs=discussions)
 
 
 def refresh_snapshot(
@@ -272,7 +300,14 @@ def refresh_snapshot(
 ) -> dict[str, Any]:
     """Fully refresh remote state, returning full sections only when they changed."""
 
-    current = current_snapshot if current_snapshot is not None else collect_snapshot(repo, number)
+    expected = {
+        "pr": expected_pr_fingerprint,
+        "threads": expected_threads_fingerprint,
+        "checks": expected_checks_fingerprint,
+    }
+    valid_previous = reviewed_previous(previous_snapshot, repo, number, expected_head, expected)
+    current = current_snapshot if current_snapshot is not None else collect_selected(
+        repo, number, previous=previous_snapshot if valid_previous else None)
     changed_fields: list[str] = []
     if current["headRefOid"] != expected_head:
         changed_fields.append("head")
@@ -283,11 +318,6 @@ def refresh_snapshot(
         or current["pr"]["baseRefOid"] != expected_base_sha
     ):
         changed_fields.append("base")
-    expected = {
-        "pr": expected_pr_fingerprint,
-        "threads": expected_threads_fingerprint,
-        "checks": expected_checks_fingerprint,
-    }
     for name in ("pr", "threads", "checks"):
         if current["fingerprints"][name] != expected[name]:
             changed_fields.append(name)
@@ -315,6 +345,7 @@ def refresh_snapshot(
             "unchanged": not changed_fields,
             "changed_fields": changed_fields,
             "base_comparison": "checked" if expected_base_name is not None else "not_provided",
+            "context_coverage": review_context.coverage(current["pr"]),
         }
     )
     if "head" in changed_fields:
@@ -328,17 +359,6 @@ def refresh_snapshot(
     if previous_snapshot is not None:
         # A saved file is useful only if its contents independently match the
         # caller's previously reviewed fingerprints, identity and head.
-        try:
-            valid_previous = (
-                previous_snapshot["schema_version"] == 1
-                and previous_snapshot["repo"] == repo
-                and previous_snapshot["number"] == number
-                and previous_snapshot["headRefOid"] == expected_head
-                and section_fingerprints(previous_snapshot["pr"], previous_snapshot["threads"],
-                                         previous_snapshot["checks"]) == expected
-            )
-        except (KeyError, TypeError, ValueError):
-            valid_previous = False
         if not valid_previous:
             result.update({name: current[name] for name in ("pr", "threads", "checks")})
             result["evidence_reset"] = "previous snapshot does not match reviewed evidence; read full sections"
@@ -377,6 +397,8 @@ def main() -> int:
         command_parser.add_argument("--pr", required=True, type=int)
         command_parser.add_argument("--snapshot-out")
         command_parser.add_argument("--page-chars", type=int, default=24000)
+        command_parser.add_argument("--issue", action="append", help="Additional issue explicitly selected for review (repeatable)")
+        command_parser.add_argument("--issue-comments", action="append", help="Issue whose full discussion must be read and refreshed (repeatable)")
     refresh_parser.add_argument("--expected-head", required=True)
     refresh_parser.add_argument("--expected-pr-fingerprint", required=True)
     refresh_parser.add_argument("--expected-threads-fingerprint", required=True)
@@ -396,7 +418,7 @@ def main() -> int:
         if arguments.page_chars <= 0:
             raise SnapshotError("--page-chars must be positive")
         if arguments.command == "collect":
-            result = collect_snapshot(arguments.repo, arguments.pr)
+            result = collect_selected(arguments.repo, arguments.pr, arguments.issue, arguments.issue_comments)
             current = result
         else:
             if bool(arguments.previous_snapshot) != bool(arguments.previous_storage_sha256):
@@ -408,7 +430,11 @@ def main() -> int:
                         arguments.previous_storage_sha256)["snapshot"]
                 except (OSError, ValueError, KeyError, TypeError) as error:
                     reset = str(error)
-            current = collect_snapshot(arguments.repo, arguments.pr)
+            valid_previous = reviewed_previous(previous, arguments.repo, arguments.pr, arguments.expected_head,
+                {"pr": arguments.expected_pr_fingerprint, "threads": arguments.expected_threads_fingerprint,
+                 "checks": arguments.expected_checks_fingerprint})
+            current = collect_selected(arguments.repo, arguments.pr, arguments.issue, arguments.issue_comments,
+                                       previous if valid_previous else None)
             result = refresh_snapshot(
                 arguments.repo,
                 arguments.pr,
