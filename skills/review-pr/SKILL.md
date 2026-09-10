@@ -79,7 +79,7 @@ worktree、latest-base 合并与冲突修复仍按下文对应条件单独判断
 
 ## 快速审查协议
 
-优化正常成功路径的模型往返和重复输出，不减少远程读取、diff 审查、线程分页、漂移检查、
+优化正常成功路径的模型往返和重复输出，不减少必要远程证据、diff 审查、线程分页、漂移检查、
 权限边界或最终刷新。已经加载且本轮没有变化的本 Skill、`review` 核心和引用文件不重复读取。
 
 - 首次快照使用一个 helper 先冻结 PR 元数据和 head，再并行收集完整分页的 threads/replies 与
@@ -95,7 +95,8 @@ worktree、latest-base 合并与冲突修复仍按下文对应条件单独判断
   的绿色 CI 绑定到当前快照。helper 不可用时按下文 **手动快照回退**执行，不得降低证据范围。
   helper 已检测到 head 或身份不一致时，本轮快照无效；重新采集，不能通过手动回退绕过检查。
 - 支持一次模型调用内编排多个工具时，先并行执行初始远程快照与本地 status。确认本地模式和
-  权限后，在一次程序化调用中依次等待准备 helper、base fetch、checkout 校验和 diff 清单；
+  权限后，在一次程序化调用中依次等待准备 helper 的结构化回执和本地 range 取证；准备 helper
+  已完成本轮 head/base fetch 与 checkout 校验，不再紧接着重复 fetch 或打印全量分支列表。
   每条命令仍是独立工具调用，只有明确完成且 `exit_code === 0` 才进入下一步。返回运行中会话
   时继续等待同一会话，禁止重新启动相同命令。
 - 首次语义审查后冻结 remote head、base SHA、merge-base、changed paths、raw diff 和三类远程
@@ -111,13 +112,20 @@ worktree、latest-base 合并与冲突修复仍按下文对应条件单独判断
   python3 "<review-pr-skill-dir>/scripts/review_snapshot.py" refresh \
     --repo <base-owner>/<base-repo> --pr <number> \
     --expected-head <head-sha> \
+    --expected-base-name <base-branch> --expected-base-sha <frozen-base-sha> \
     --expected-pr-fingerprint <sha256> \
     --expected-threads-fingerprint <sha256> \
     --expected-checks-fingerprint <sha256>
   ```
 
-  `unchanged: true` 只省略重复传回模型的全量内容，不代表跳过远程刷新。变化的 section 必须完整
-  返回并重新审查；head 变化时返回全部当前证据，并按下文重新准备和审查。
+  `unchanged: true` 只省略重复传回模型的全量内容，不代表跳过远程刷新。默认完整返回变化的
+  section；head 变化时返回全部当前证据。base 参数成对提供，不能把 `base_comparison: not_provided`
+  当作 base 未变；旧 helper 路径需手动比较 base 名称和 SHA，按下文重新确定审查范围。
+
+大 PR 或需要复用准备元数据时，读取 [快照传输协议](references/snapshot-protocol.md)，使用可选
+`--snapshot-out` 把完整证据存到获准的任务临时文件并分页读取。刷新可以按已验证的前次快照输出
+完整变化线程和全量索引；缺页、旧证据丢失或不匹配时回退完整读取。小 PR 可继续直接 JSON 输出，
+不强制增加文件操作。checks 集合与线程列表的返回顺序不影响指纹，评论本身的顺序仍保留。
 
 ### 手动快照回退
 
@@ -176,16 +184,22 @@ checkout 有变更就推断为 worktree 模式。普通本地 PR 运行以下命
 先按同一规则选择分支：
 
 ```bash
-bash "<review-pr-skill-dir>/scripts/prepare-pr-branch.sh" <pr-ref>
-bash "<review-pr-skill-dir>/scripts/prepare-pr-branch.sh" --merge-latest <pr-ref>
+bash "<review-pr-skill-dir>/scripts/prepare-pr-branch.sh" --expected-head <head-sha> --json <pr-ref>
+bash "<review-pr-skill-dir>/scripts/prepare-pr-branch.sh" --merge-latest --expected-head <head-sha> --json <pr-ref>
 ```
 
 需要隔离 source checkout 时，显式使用：
 
 ```bash
-bash "<review-pr-skill-dir>/scripts/prepare-pr-branch.sh" --worktree <pr-ref>
-bash "<review-pr-skill-dir>/scripts/prepare-pr-branch.sh" --worktree --merge-latest <pr-ref>
+bash "<review-pr-skill-dir>/scripts/prepare-pr-branch.sh" --worktree --expected-head <head-sha> --json <pr-ref>
+bash "<review-pr-skill-dir>/scripts/prepare-pr-branch.sh" --worktree --merge-latest --expected-head <head-sha> --json <pr-ref>
 ```
+
+`--expected-head` 必须来自已接受的初始快照。仅接受退出码 0、`schema_version: 1`、
+`status: prepared` 的回执，核对请求 repo/number、head、base、merge-base、checkout/upstream、
+collision 和 integration 模式。日志在 stderr；`failed` 回执说明停止阶段，不能自动清理或重启写入。
+旧 CLI 仍可用，但调用方需收集等价证据。已有完整任务快照时可按快照传输协议传给准备 helper，
+省去重复 `gh pr view`；存储哈希和身份校验不替代真实 fetch/head 校验。
 
 如果用户没有请求 latest-base，即使 GitHub 报告 `mergeable: CONFLICTING` 或
 `mergeStateStatus: DIRTY`，review 仍使用普通准备流程。将 PR head checkout 到同名本地
@@ -204,18 +218,17 @@ merge 动作。对于本地模式，先准备 PR head 同名分支或 collision 
 `<owner>/<branch>` 时，helper 才复用；否则停止并要求检查或删除它。不要只为绕过
 分支名冲突而选择 latest-base 模式。
 
-普通 checkout 后 fetch 最新 base，并检查 PR 是否已经包含它：
+准备回执已冻结最新 base；普通 review 使用回执中的远程 head 检查 PR 是否已经包含它：
 
 ```bash
-git merge-base --is-ancestor <base-remote>/<base-branch> HEAD
+git merge-base --is-ancestor <frozen-base-sha> <remote-head-sha>
 ```
 
 如果检查失败，报告 PR 落后于最新 base，不要自动合并。GitHub 报告冲突时，可在有用的
 情况下将 `git merge-tree` 作为只读冲突信号：
 
 ```bash
-merge_base=$(git merge-base <base-remote>/<base-branch> HEAD)
-git merge-tree "$merge_base" <base-remote>/<base-branch> HEAD
+git merge-tree <frozen-merge-base> <frozen-base-sha> <remote-head-sha>
 ```
 
 将 `baseRefName` 视为目标分支；不要硬编码 `dev`。只有明确请求 latest-base 后，才使用
@@ -255,13 +268,14 @@ worktree 模式下，在报告的 worktree 路径运行所有冲突命令，例�
 
 ### 4. 验证 Checkout 和 Review 上下文
 
-准备后验证本地状态：
+结构化准备回执已校验本地状态，事实未变时直接复用。旧 helper 或后续状态漂移时针对当前分支
+补充等价检查，不打印全量 `git branch -vv`：
 
 ```bash
 git branch --show-current
 git rev-parse HEAD
 git status --short
-git branch -vv
+git for-each-ref --format='%(upstream:short)' refs/heads/<selected-branch>
 ```
 
 普通本地准备要求分支干净、分支名为 PR head 分支或 collision fallback、upstream 设置为
@@ -310,17 +324,17 @@ reviewer 必须判断评论属于 `reasonable`、`partially reasonable`、`unrea
 `git merge-tree <merge-base> <base-remote>/<base-branch> HEAD` 作为只读的过时或
 冲突信号。
 
-使用 `origin` 前确认 base 仓库 remote。fetch 真实 base 分支，再检查 diff 和周围代码：
+准备 helper 已确认 base remote 并 fetch，使用回执中的准确端点调用 `review` 的本地快照能力：
 
 ```bash
-git fetch <base-remote> <base-branch>
-git diff --stat <base-sha>...<remote-head-sha>
-git diff --name-status <base-sha>...<remote-head-sha>
-git diff <base-sha>...<remote-head-sha>
+python3 "<review-skill-dir>/scripts/collect_review_snapshot.py" \
+  --repo <prepared-checkout> --range '<frozen-base-sha>...<remote-head-sha>'
 ```
 
-冻结 fetch 后的 base SHA 与准确 `headRefOid`。latest-base 模式不能用本地 merge HEAD
-替代远程 head；集成 diff 另行审查，并明确两种快照的证据归属。
+核对返回 merge-base 与准备回执一致，按 `review` 的分页覆盖与最终复验规则完整读取 raw patch。
+helper 不可用时，使用相同冻结端点的 `git diff --name-status` 与完整 `git diff` 收集；没有已验证
+base 的只读/旧 helper 路径才在授权范围内补齐 base 获取。不能用无关 origin 或未确认 ref 替代。
+latest-base 模式不能用本地 merge HEAD 替代远程 head；集成 diff 另行审查并标记证据归属。
 
 使用 `rg` 搜索周围源码、测试、配置、生成文件和文档。根据仓库验证要求、变更风险和
 用户授权选择适当的本地检查。初始 helper 或手动快照已经包含 PR checks；需要单独诊断
@@ -333,7 +347,8 @@ gh pr checks <number> [--repo <base-owner>/<base-repo>] --json bucket,link,name,
 单独诊断结果不自动替换已验证的快照。若要将其用于审查结论或免跑本地全量 CI，须按
 **手动快照回退**完成查询前后 head 复验及其他快照读取，或重新运行 snapshot helper。
 
-相关时运行 `git diff --check` 等轻量本地检查。远程 checks 对当前准确 head 已全部完成且通过时，
+相关时运行 `git diff --check <frozen-merge-base> <remote-head-sha>` 等轻量本地检查。裸
+`git diff --check` 不能验证干净 checkout 的已提交 PR 差异。远程 checks 对当前准确 head 已全部完成且通过时，
 不默认重复运行本地全量 CI；按照 **快速审查协议**补充必要的针对性验证。
 
 ### 5. 证据驱动的线程维护
@@ -354,6 +369,10 @@ fingerprint 时，按 **手动快照回退**重新完整采集；通过最后的
 
 - 如果 `headRefOid` 发生变化，停止最终输出，将准备好的 checkout 更新到新 head，
   对照真实 base 检查新 diff，并重新验证此前 finding 和新变更。
+- 如果 base 分支名或 SHA 变化（包括 PR retarget），重新冻结该真实 base 并计算 merge-base 和
+  diff 内容。head 未变且 merge-base、raw patch 与相关上下文未变时复用代码审查；范围变化时
+  检查增量并复核已有 finding，不能用旧 base 的结论覆盖新范围。获取新 base 仍受只读/不改变 Git
+  限制约束；证据不足时报告限制。latest-base 集成结果保留旧快照身份，不自动 reset 或重做 merge。
 - 如果出现新的 review、thread、reply 或 resolution/outdated 状态变化，读取其准确
   内容，结合当前 head 和周围代码验证，更新已有评论的对应条目；只有再次 review
   识别出不同的额外问题时才补充独立发现；已有 F 条目按当前证据复核更新。

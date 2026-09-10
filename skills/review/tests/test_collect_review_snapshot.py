@@ -376,6 +376,24 @@ class CollectReviewSnapshotTests(unittest.TestCase):
             self.actual_patch(base, target, "renamed [*] ? name.txt"),
         )
 
+    def test_pr_range_checks_committed_whitespace_even_with_a_clean_checkout(self) -> None:
+        self.write("file.txt", "base\n")
+        base = self.commit("base")
+        self.write("file.txt", "trailing spaces   \n")
+        head = self.commit("PR change")
+        snapshot = self.success("--range", f"{base}...{head}")
+        self.assertEqual(snapshot["snapshot"]["base_sha"], base)
+        self.assertFalse(snapshot["checkout"]["dirty"])
+        self.assertEqual(self._git("diff", "--check", cwd=self.repository), "")
+        check = subprocess.run(
+            ["git", "diff", "--check", snapshot["snapshot"]["base_sha"],
+             snapshot["snapshot"]["target_sha"]], cwd=self.repository,
+            env=self.git_environment(), capture_output=True, text=True, check=False,
+        )
+        self.assertNotEqual(check.returncode, 0)
+        self.assertIn("trailing whitespace", check.stdout)
+        self.assertIn("file.txt:1", check.stdout)
+
     def test_shallow_commit_with_an_unavailable_parent_is_an_error(self) -> None:
         self.write("tracked.txt", "base\n")
         self.commit("base")

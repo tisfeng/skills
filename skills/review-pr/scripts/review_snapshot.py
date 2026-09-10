@@ -20,6 +20,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 import review_threads  # noqa: E402
+import snapshot_transport  # noqa: E402
 
 
 PR_FIELDS = (
@@ -46,6 +47,14 @@ def canonical_fingerprint(value: Any) -> str:
         sort_keys=True,
     ).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
+
+
+def section_fingerprints(pr, threads, checks):
+    """Ignore transport order for sets, but retain chronological reply content."""
+    thread_set = dict(threads, threads=sorted(threads["threads"], key=lambda item: item["id"]))
+    check_set = dict(checks, items=sorted(checks["items"], key=canonical_fingerprint))
+    return {"pr": canonical_fingerprint(pr), "threads": canonical_fingerprint(thread_set),
+            "checks": canonical_fingerprint(check_set)}
 
 
 def run_json(
@@ -195,7 +204,7 @@ def collect_snapshot(repo: str, number: int) -> dict[str, Any]:
     started = time.monotonic()
     pr, pr_ms = measured(lambda: collect_pr(repo, number))
     expected_head = pr.get("headRefOid")
-    if not isinstance(expected_head, str):
+    if not isinstance(expected_head, str) or not expected_head:
         raise SnapshotError("gh pr view did not return headRefOid")
     with ThreadPoolExecutor(max_workers=2) as executor:
         futures = {
@@ -219,17 +228,15 @@ def collect_snapshot(repo: str, number: int) -> dict[str, Any]:
     if pr.get("url") != threads.get("url"):
         raise SnapshotError("PR identity changed during snapshot collection; collect again")
 
-    fingerprints = {
-        "pr": canonical_fingerprint(pr),
-        "threads": canonical_fingerprint(threads),
-        "checks": canonical_fingerprint(checks),
-    }
+    fingerprints = section_fingerprints(pr, threads, checks)
     return {
         "schema_version": 1,
         "mode": "collect",
         "repo": repo,
         "number": number,
         "headRefOid": pr["headRefOid"],
+        "baseRefName": pr["baseRefName"],
+        "baseRefOid": pr["baseRefOid"],
         "updatedAt": pr["updatedAt"],
         "state": pr["state"],
         "mergeStateStatus": pr["mergeStateStatus"],
@@ -258,13 +265,24 @@ def refresh_snapshot(
     expected_pr_fingerprint: str,
     expected_threads_fingerprint: str,
     expected_checks_fingerprint: str,
+    expected_base_name: str | None = None,
+    expected_base_sha: str | None = None,
+    previous_snapshot: dict[str, Any] | None = None,
+    current_snapshot: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Fully refresh remote state, returning full sections only when they changed."""
 
-    current = collect_snapshot(repo, number)
+    current = current_snapshot if current_snapshot is not None else collect_snapshot(repo, number)
     changed_fields: list[str] = []
     if current["headRefOid"] != expected_head:
         changed_fields.append("head")
+    if (expected_base_name is None) != (expected_base_sha is None):
+        raise SnapshotError("expected base name and SHA must be provided together")
+    if expected_base_name is not None and (
+        current["pr"]["baseRefName"] != expected_base_name
+        or current["pr"]["baseRefOid"] != expected_base_sha
+    ):
+        changed_fields.append("base")
     expected = {
         "pr": expected_pr_fingerprint,
         "threads": expected_threads_fingerprint,
@@ -281,6 +299,8 @@ def refresh_snapshot(
             "repo",
             "number",
             "headRefOid",
+            "baseRefName",
+            "baseRefOid",
             "updatedAt",
             "state",
             "mergeStateStatus",
@@ -294,6 +314,7 @@ def refresh_snapshot(
             "mode": "refresh",
             "unchanged": not changed_fields,
             "changed_fields": changed_fields,
+            "base_comparison": "checked" if expected_base_name is not None else "not_provided",
         }
     )
     if "head" in changed_fields:
@@ -304,6 +325,38 @@ def refresh_snapshot(
         for name in ("pr", "threads", "checks"):
             if name in changed_fields:
                 result[name] = current[name]
+    if previous_snapshot is not None:
+        # A saved file is useful only if its contents independently match the
+        # caller's previously reviewed fingerprints, identity and head.
+        try:
+            valid_previous = (
+                previous_snapshot["schema_version"] == 1
+                and previous_snapshot["repo"] == repo
+                and previous_snapshot["number"] == number
+                and previous_snapshot["headRefOid"] == expected_head
+                and section_fingerprints(previous_snapshot["pr"], previous_snapshot["threads"],
+                                         previous_snapshot["checks"]) == expected
+            )
+        except (KeyError, TypeError, ValueError):
+            valid_previous = False
+        if not valid_previous:
+            result.update({name: current[name] for name in ("pr", "threads", "checks")})
+            result["evidence_reset"] = "previous snapshot does not match reviewed evidence; read full sections"
+        elif "head" not in changed_fields and "threads" in changed_fields:
+            before = {item["id"]: item for item in previous_snapshot["threads"]["threads"]}
+            after = {item["id"]: item for item in current["threads"]["threads"]}
+            result.pop("threads", None)
+            result["threads_delta"] = {
+                "previous_fingerprint": expected_threads_fingerprint,
+                "fingerprint": current["fingerprints"]["threads"],
+                "identity": {key: value for key, value in current["threads"].items() if key != "threads"},
+                "index": [{"id": key, "fingerprint": review_threads.fingerprint(value),
+                           "isResolved": value["isResolved"], "isOutdated": value["isOutdated"]}
+                          for key, value in sorted(after.items())],
+                "removed_ids": sorted(before.keys() - after.keys()),
+                "changed": [value for key, value in sorted(after.items()) if key not in before
+                            or review_threads.fingerprint(value) != review_threads.fingerprint(before[key])],
+            }
     return result
 
 
@@ -314,19 +367,48 @@ def main() -> int:
     subparsers = parser.add_subparsers(dest="command", required=True)
     collect_parser = subparsers.add_parser("collect")
     refresh_parser = subparsers.add_parser("refresh")
+    page_parser = subparsers.add_parser("page")
+    page_parser.add_argument("--snapshot-file", required=True)
+    page_parser.add_argument("--expected-storage-sha256", required=True)
+    page_parser.add_argument("--offset", type=int, default=0)
+    page_parser.add_argument("--chars", type=int, default=24000)
     for command_parser in (collect_parser, refresh_parser):
         command_parser.add_argument("--repo", required=True)
         command_parser.add_argument("--pr", required=True, type=int)
+        command_parser.add_argument("--snapshot-out")
+        command_parser.add_argument("--page-chars", type=int, default=24000)
     refresh_parser.add_argument("--expected-head", required=True)
     refresh_parser.add_argument("--expected-pr-fingerprint", required=True)
     refresh_parser.add_argument("--expected-threads-fingerprint", required=True)
     refresh_parser.add_argument("--expected-checks-fingerprint", required=True)
+    refresh_parser.add_argument("--expected-base-name")
+    refresh_parser.add_argument("--expected-base-sha")
+    refresh_parser.add_argument("--previous-snapshot")
+    refresh_parser.add_argument("--previous-storage-sha256")
     arguments = parser.parse_args()
 
     try:
+        if arguments.command == "page":
+            result = snapshot_transport.page(arguments.snapshot_file, arguments.expected_storage_sha256,
+                                             arguments.offset, arguments.chars)
+            print(json.dumps(result, ensure_ascii=False, separators=(",", ":")))
+            return 0
+        if arguments.page_chars <= 0:
+            raise SnapshotError("--page-chars must be positive")
         if arguments.command == "collect":
             result = collect_snapshot(arguments.repo, arguments.pr)
+            current = result
         else:
+            if bool(arguments.previous_snapshot) != bool(arguments.previous_storage_sha256):
+                raise SnapshotError("previous snapshot and storage SHA-256 must be provided together")
+            previous, reset = None, None
+            if arguments.previous_snapshot:
+                try:
+                    previous = snapshot_transport.read(arguments.previous_snapshot,
+                        arguments.previous_storage_sha256)["snapshot"]
+                except (OSError, ValueError, KeyError, TypeError) as error:
+                    reset = str(error)
+            current = collect_snapshot(arguments.repo, arguments.pr)
             result = refresh_snapshot(
                 arguments.repo,
                 arguments.pr,
@@ -334,8 +416,18 @@ def main() -> int:
                 expected_pr_fingerprint=arguments.expected_pr_fingerprint,
                 expected_threads_fingerprint=arguments.expected_threads_fingerprint,
                 expected_checks_fingerprint=arguments.expected_checks_fingerprint,
+                expected_base_name=arguments.expected_base_name,
+                expected_base_sha=arguments.expected_base_sha,
+                previous_snapshot=previous,
+                current_snapshot=current,
             )
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+            if reset is not None:
+                result.update({name: current[name] for name in ("pr", "threads", "checks")})
+                result["evidence_reset"] = "previous snapshot unavailable; read full sections: " + reset
+        if arguments.snapshot_out:
+            storage_hash = snapshot_transport.save(arguments.snapshot_out, current, result)
+            result = snapshot_transport.page(arguments.snapshot_out, storage_hash, 0, arguments.page_chars)
+        print(json.dumps(result, ensure_ascii=False, separators=(",", ":")))
         return 0
     except (
         SnapshotError,

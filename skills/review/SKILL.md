@@ -54,7 +54,9 @@ python3 "<review-skill-dir>/scripts/collect_review_snapshot.py" --repo <repo-roo
 
 三条是不同输入的示例，不需全部执行。merge commit 必须明确 `--parent <1-based-number>`；root
 commit 对比空树。`--path <repo-relative-path>` 可重复，用于字面路径过滤，不支持 glob/pathspec
-魔法，也不接受路径穿越。工作树、任务归属、文件/模块和 PR 模式仍按原有快照规则执行。
+魔法，也不接受路径穿越。工作树、任务归属、文件/模块仍按原有快照规则执行。PR 编排器可以
+把已冻结的真实 base 与远程 head 作为 `--range '<base-sha>...<remote-head-sha>'` 交给本 helper；
+这只复用本地取证，不授权 GitHub 查询、checkout 或线程操作。latest-base 本地集成结果另取快照。
 
 helper 只读本地 Git 对象；不写索引、ref 或对象，不自动 fetch。接受 `schema_version: 1` 且
 命令成功的结果，冻结 `snapshot` 中的完整端点和 `fingerprint`，检查 `changes` 与 `patch`。
@@ -83,6 +85,10 @@ JSON 使用 UTF-8/surrogateescape 无损表示原始字节，特殊路径由 NUL
 补读历史源码应使用 `git show <frozen-sha>:<path>`。运行当前 checkout 的测试前必须证明相关源码、
 测试及配置匹配所审查提交；HEAD 不同或相关内容有修改时不能把测试结果归属给历史提交。helper
 不替代测试前后内容一致性检查，也不证明语义审查已经完成。
+
+检查已提交内容的空白错误时使用 `git diff --check <base_sha> <target_sha>`，其中 base 是快照实际
+比较的 parent、端点或 merge-base。裸 `git diff --check` 只检查当前未暂存差异，不能证明提交或
+PR patch 通过检查。命令返回非零时保留诊断，不将其当作“工作树干净所以检查通过”。
 
 ### 外部依赖调查
 

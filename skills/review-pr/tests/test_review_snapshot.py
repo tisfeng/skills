@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import contextlib
+import copy
 import importlib.util
+import io
+import json
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -110,6 +115,26 @@ class ReviewSnapshotTests(unittest.TestCase):
         ):
             return review_snapshot.collect_snapshot("owner/repo", 42)
 
+    @staticmethod
+    def with_fingerprints(snapshot: dict[str, object]) -> dict[str, object]:
+        snapshot["fingerprints"] = review_snapshot.section_fingerprints(
+            snapshot["pr"], snapshot["threads"], snapshot["checks"]
+        )
+        return snapshot
+
+    @staticmethod
+    def refresh(initial: dict[str, object], current: dict[str, object], **extra: object) -> dict[str, object]:
+        return review_snapshot.refresh_snapshot(
+            "owner/repo",
+            42,
+            expected_head=initial["headRefOid"],
+            expected_pr_fingerprint=initial["fingerprints"]["pr"],
+            expected_threads_fingerprint=initial["fingerprints"]["threads"],
+            expected_checks_fingerprint=initial["fingerprints"]["checks"],
+            current_snapshot=current,
+            **extra,
+        )
+
     def test_collect_returns_complete_evidence_and_stable_fingerprints(self) -> None:
         first = self.collect()
         second = self.collect()
@@ -214,6 +239,10 @@ class ReviewSnapshotTests(unittest.TestCase):
         initial = self.collect()
         current = self.collect()
         current["headRefOid"] = "head-2"
+        current["pr"]["headRefOid"] = "head-2"
+        current["threads"]["headRefOid"] = "head-2"
+        current["checks"]["headRefOid"] = "head-2"
+        self.with_fingerprints(current)
 
         with patch.object(review_snapshot, "collect_snapshot", return_value=current):
             refreshed = review_snapshot.refresh_snapshot(
@@ -228,6 +257,207 @@ class ReviewSnapshotTests(unittest.TestCase):
         self.assertIn("head", refreshed["changed_fields"])
         for section in ("pr", "threads", "checks"):
             self.assertIn(section, refreshed)
+
+    def test_base_only_refresh_requires_complete_expected_pair_and_marks_base(self) -> None:
+        initial = self.collect()
+        current = copy.deepcopy(initial)
+        current["pr"]["baseRefName"] = "release/1.0"
+        current["pr"]["baseRefOid"] = "base-2"
+        current["baseRefName"] = "release/1.0"
+        current["baseRefOid"] = "base-2"
+        self.with_fingerprints(current)
+
+        refreshed = self.refresh(
+            initial,
+            current,
+            expected_base_name="main",
+            expected_base_sha="base-1",
+        )
+
+        self.assertIn("base", refreshed["changed_fields"])
+        self.assertIn("pr", refreshed["changed_fields"])
+        self.assertEqual(refreshed["base_comparison"], "checked")
+        self.assertEqual(refreshed["pr"]["baseRefOid"], "base-2")
+        with self.assertRaisesRegex(review_snapshot.SnapshotError, "provided together"):
+            self.refresh(initial, current, expected_base_name="main")
+
+    def test_transport_order_is_ignored_but_reply_order_is_evidence(self) -> None:
+        initial = self.collect()
+        second_thread = copy.deepcopy(initial["threads"]["threads"][0])
+        second_thread["id"] = "thread-2"
+        second_thread["comments"][0]["id"] = "comment-2"
+        initial["threads"]["threads"].append(second_thread)
+        initial["checks"]["items"].append(
+            {"bucket": "pass", "link": "https://example.test/other", "name": "lint", "state": "SUCCESS", "workflow": "Validate"}
+        )
+        self.with_fingerprints(initial)
+        reordered = copy.deepcopy(initial)
+        reordered["threads"]["threads"].reverse()
+        reordered["checks"]["items"].reverse()
+        self.with_fingerprints(reordered)
+
+        refreshed = self.refresh(initial, reordered)
+        self.assertTrue(refreshed["unchanged"])
+        reordered_replies = copy.deepcopy(initial)
+        reply = copy.deepcopy(reordered_replies["threads"]["threads"][0]["comments"][0])
+        reply["id"] = "comment-later"
+        reordered_replies["threads"]["threads"][0]["comments"].append(reply)
+        self.with_fingerprints(reordered_replies)
+        ordered_reply_fingerprint = reordered_replies["fingerprints"]["threads"]
+        reordered_replies["threads"]["threads"][0]["comments"].reverse()
+        self.with_fingerprints(reordered_replies)
+        self.assertNotEqual(
+            ordered_reply_fingerprint,
+            reordered_replies["fingerprints"]["threads"],
+        )
+
+    def test_valid_previous_snapshot_returns_complete_thread_deltas(self) -> None:
+        initial = self.collect()
+        current = copy.deepcopy(initial)
+        existing = current["threads"]["threads"][0]
+        existing["comments"].append(copy.deepcopy(existing["comments"][0]))
+        existing["comments"][-1]["id"] = "comment-reply"
+        existing["comments"][-1]["body"] = "A later reply"
+        existing["isResolved"] = True
+        existing["isOutdated"] = True
+        added = copy.deepcopy(existing)
+        added["id"] = "thread-new"
+        added["isResolved"] = False
+        added["comments"][0]["id"] = "comment-new"
+        current["threads"]["threads"].append(added)
+        self.with_fingerprints(current)
+
+        refreshed = self.refresh(initial, current, previous_snapshot=copy.deepcopy(initial))
+
+        self.assertNotIn("threads", refreshed)
+        delta = refreshed["threads_delta"]
+        self.assertEqual(delta["removed_ids"], [])
+        self.assertEqual([item["id"] for item in delta["changed"]], ["thread-1", "thread-new"])
+        self.assertEqual(delta["changed"][0]["comments"][-1]["body"], "A later reply")
+        self.assertTrue(delta["changed"][0]["isResolved"])
+        self.assertTrue(delta["changed"][0]["isOutdated"])
+        self.assertEqual([item["id"] for item in delta["index"]], ["thread-1", "thread-new"])
+
+    def test_thread_delta_reports_removal_and_resolution(self) -> None:
+        initial = self.collect()
+        removed = copy.deepcopy(initial["threads"]["threads"][0])
+        removed["id"] = "thread-removed"
+        removed["isResolved"] = True
+        initial["threads"]["threads"].append(removed)
+        self.with_fingerprints(initial)
+        current = copy.deepcopy(initial)
+        current["threads"]["threads"] = current["threads"]["threads"][:1]
+        current["threads"]["threads"][0]["isResolved"] = True
+        self.with_fingerprints(current)
+
+        refreshed = self.refresh(initial, current, previous_snapshot=copy.deepcopy(initial))
+
+        self.assertEqual(refreshed["threads_delta"]["removed_ids"], ["thread-removed"])
+        self.assertTrue(refreshed["threads_delta"]["changed"][0]["isResolved"])
+
+    def test_thread_delta_reports_reopen(self) -> None:
+        initial = self.collect()
+        initial["threads"]["threads"][0]["isResolved"] = True
+        self.with_fingerprints(initial)
+        current = copy.deepcopy(initial)
+        current["threads"]["threads"][0]["isResolved"] = False
+        self.with_fingerprints(current)
+
+        refreshed = self.refresh(initial, current, previous_snapshot=copy.deepcopy(initial))
+
+        changed = refreshed["threads_delta"]["changed"]
+        self.assertEqual([item["id"] for item in changed], ["thread-1"])
+        self.assertFalse(changed[0]["isResolved"])
+
+    def test_tampered_previous_snapshot_resets_to_full_evidence(self) -> None:
+        initial = self.collect()
+        tampered = copy.deepcopy(initial)
+        tampered["threads"]["threads"][0]["comments"][0]["body"] = "forged"
+
+        refreshed = self.refresh(initial, copy.deepcopy(initial), previous_snapshot=tampered)
+
+        self.assertIn("evidence_reset", refreshed)
+        for section in ("pr", "threads", "checks"):
+            self.assertIn(section, refreshed)
+
+    def test_refresh_cli_recollects_full_evidence_when_previous_file_is_corrupt(self) -> None:
+        current = self.collect()
+        with tempfile.TemporaryDirectory() as directory:
+            corrupted = Path(directory) / "previous.json"
+            corrupted.write_text("not a snapshot", encoding="utf-8")
+            output = io.StringIO()
+            arguments = [
+                "review_snapshot.py", "refresh", "--repo", "owner/repo", "--pr", "42",
+                "--expected-head", "head-1",
+                "--expected-pr-fingerprint", current["fingerprints"]["pr"],
+                "--expected-threads-fingerprint", current["fingerprints"]["threads"],
+                "--expected-checks-fingerprint", current["fingerprints"]["checks"],
+                "--previous-snapshot", str(corrupted),
+                "--previous-storage-sha256", "0" * 64,
+            ]
+            with patch.object(review_snapshot, "collect_snapshot", return_value=current) as collect_snapshot, patch.object(sys, "argv", arguments), contextlib.redirect_stdout(output):
+                self.assertEqual(review_snapshot.main(), 0)
+
+        result = json.loads(output.getvalue())
+        collect_snapshot.assert_called_once_with("owner/repo", 42)
+        self.assertIn("evidence_reset", result)
+        self.assertIn("threads", result)
+
+    def test_page_cli_reads_only_saved_local_evidence(self) -> None:
+        current = self.collect()
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "saved.json"
+            storage_hash = review_snapshot.snapshot_transport.save(path, current, current)
+            output = io.StringIO()
+            with patch.object(review_snapshot, "collect_snapshot", side_effect=AssertionError("page must not read remote state")), patch.object(
+                sys,
+                "argv",
+                [
+                    "review_snapshot.py", "page", "--snapshot-file", str(path),
+                    "--expected-storage-sha256", storage_hash, "--chars", "1",
+                ],
+            ), contextlib.redirect_stdout(output):
+                self.assertEqual(review_snapshot.main(), 0)
+
+        result = json.loads(output.getvalue())
+        self.assertEqual(result["transport"], "paged")
+        self.assertEqual(result["page"]["offset"], 0)
+
+    def test_refresh_snapshot_out_persists_full_current_evidence_not_delta(self) -> None:
+        initial = self.collect()
+        current = copy.deepcopy(initial)
+        current_thread = current["threads"]["threads"][0]
+        current_thread["comments"].append(copy.deepcopy(current_thread["comments"][0]))
+        current_thread["comments"][-1]["id"] = "comment-new-reply"
+        current_thread["comments"][-1]["body"] = "new reply"
+        self.with_fingerprints(current)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            previous_path = root / "previous.json"
+            previous_hash = review_snapshot.snapshot_transport.save(previous_path, initial, initial)
+            output_path = root / "current.json"
+            output = io.StringIO()
+            arguments = [
+                "review_snapshot.py", "refresh", "--repo", "owner/repo", "--pr", "42",
+                "--expected-head", "head-1",
+                "--expected-pr-fingerprint", initial["fingerprints"]["pr"],
+                "--expected-threads-fingerprint", initial["fingerprints"]["threads"],
+                "--expected-checks-fingerprint", initial["fingerprints"]["checks"],
+                "--expected-base-name", "main", "--expected-base-sha", "base-1",
+                "--previous-snapshot", str(previous_path),
+                "--previous-storage-sha256", previous_hash,
+                "--snapshot-out", str(output_path), "--page-chars", "5",
+            ]
+            with patch.object(review_snapshot, "collect_snapshot", return_value=current) as collect_snapshot, patch.object(sys, "argv", arguments), contextlib.redirect_stdout(output):
+                self.assertEqual(review_snapshot.main(), 0)
+
+            first_page = json.loads(output.getvalue())
+            stored = review_snapshot.snapshot_transport.read(output_path, first_page["storage_sha256"])
+
+        collect_snapshot.assert_called_once_with("owner/repo", 42)
+        self.assertEqual(stored["snapshot"]["threads"], current["threads"])
+        self.assertIn("threads_delta", stored["report"])
+        self.assertNotIn("threads", stored["report"])
 
     def test_checks_treat_failure_and_pending_exit_codes_as_observed_state(self) -> None:
         for exit_code in (0, 1, 8):
