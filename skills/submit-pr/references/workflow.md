@@ -22,6 +22,8 @@ helper 只接受指向 `github.com` 的 SSH 或 HTTPS remote，并按以下顺�
 显式参数只解决歧义，不能绕过 remote URL、fork 网络和 GitHub 返回身份的校验。
 同次拓扑发现中，显式 repository 与已查询的 remote repository 相同时复用元数据；每次
 `plan` 或 `apply` 调用重新发现，不跨调用缓存，也不省略写入前后的状态校验。
+同一 `apply` 调用内已经验证的 repository 元数据、remote push URL 和冻结 SHA 可以复用，避免
+为相同事实重复启动本地进程；复用范围不得跨越新的 helper 调用。
 
 ## 分支决策
 
@@ -165,6 +167,10 @@ gh pr create \
 远程分支与计划 SHA 相同则复用，是其祖先则普通快进推送，领先或分叉时停止。
 目标仓库要求特定 Issue 策略时显式传入 `--issue-policy`；未指定时使用 `neutral`。
 
+最终 PR 验证完成即满足本 Skill 的远程交付终点。默认不等待 CI，也不要求 checks 成功；仅当用户
+或目标仓库规则明确要求时，调用 Agent 才在 helper 返回后单独查询或等待 checks。CI 查询结果不能
+替代上述 PR 状态、身份、正文和 head SHA 验证。
+
 ## 输出
 
 helper 向 stdout 输出 JSON。apply 结果包含：
@@ -176,4 +182,10 @@ helper 向 stdout 输出 JSON。apply 结果包含：
 - `branch_action`：`created`、`updated`、`reused` 或 `current`
 - `push_action`：`created`、`updated` 或 `reused`
 - `pr_action`：`created` 或 `reused`
+- `pr_verification`：最终验证状态、PR state/title、正文 SHA-256 和远程 head SHA
+- `timings_ms`：apply 的 worktree、认证、拓扑、fetch、计划复验、PR 查询、push、创建和最终验证
+  等阶段耗时；用于诊断而不是固定性能承诺
 - `needs_screenshots`：UI 修改时为 `true`
+
+调用 Agent 应直接使用成功 JSON 生成最终回执，不再为相同字段读取完整 PR 正文。只有 helper 返回
+成功并且 `pr_verification.status == "passed"` 时才可声称 PR 最终验证通过。

@@ -251,6 +251,12 @@ class RenderTests(unittest.TestCase):
         self.assertEqual(state["unstaged"], ["README.md"])
         self.assertEqual(state["untracked"], ["untracked.md"])
 
+    def test_python_version_guard_rejects_incompatible_runtime(self) -> None:
+        with self.assertRaisesRegex(submit_pr.SubmitPRError, r"Python 3.10\+"):
+            submit_pr.require_supported_python((3, 9, 6))
+
+        submit_pr.require_supported_python((3, 10, 0))
+
 
 class WorkflowIntegrationTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -382,6 +388,8 @@ class WorkflowIntegrationTests(unittest.TestCase):
                 args = sys.argv[1:]
                 state_path = Path(os.environ["FAKE_GH_STATE"])
                 state = json.loads(state_path.read_text())
+                state.setdefault("gh_calls", []).append(args)
+                state_path.write_text(json.dumps(state))
 
                 def value(flag):
                     return args[args.index(flag) + 1]
@@ -424,7 +432,11 @@ class WorkflowIntegrationTests(unittest.TestCase):
                     state_path.write_text(json.dumps(state))
                     print(pr["url"])
                 elif args[:2] == ["pr", "view"]:
-                    state["pr"]["headRefOid"] = os.environ["FAKE_HEAD_SHA"]
+                    state["pr"]["headRefOid"] = (
+                        "0" * 40
+                        if state.get("corrupt_final_view")
+                        else os.environ["FAKE_HEAD_SHA"]
+                    )
                     state_path.write_text(json.dumps(state))
                     print(json.dumps(state["pr"]))
                 else:
@@ -608,6 +620,24 @@ class WorkflowIntegrationTests(unittest.TestCase):
         self.assertEqual(first["push_action"], "created")
         self.assertEqual(first["pr_action"], "created")
         self.assertFalse(first["is_cross_repository"])
+        self.assertEqual(first["pr_verification"]["status"], "passed")
+        self.assertEqual(first["pr_verification"]["head_sha"], self.head_sha)
+        self.assertEqual(len(first["pr_verification"]["body_sha256"]), 64)
+        self.assertGreaterEqual(first["timings_ms"]["total"], 0)
+        self.assertTrue(
+            {
+                "worktree_check",
+                "github_auth",
+                "topology",
+                "fetch_base",
+                "plan_revalidation",
+                "existing_pr_lookup",
+                "local_branch",
+                "push",
+                "pr_create",
+                "final_pr_verification",
+            }.issubset(first["timings_ms"])
+        )
         state = json.loads(self.state_path.read_text(encoding="utf-8"))
         self.assertEqual(
             [
@@ -638,12 +668,18 @@ class WorkflowIntegrationTests(unittest.TestCase):
         self.assertEqual(remote_main, self.base_sha)
         self.assertEqual(remote_head, self.head_sha)
 
+        state["gh_calls"] = []
+        self.state_path.write_text(json.dumps(state), encoding="utf-8")
         second = json.loads(
             run(self.command("apply"), cwd=self.repo, env=environment).stdout
         )
         state = json.loads(self.state_path.read_text(encoding="utf-8"))
         self.assertEqual(second["pr_action"], "reused")
         self.assertEqual(state["create_count"], 1)
+        self.assertEqual(
+            sum(call[:2] == ["pr", "view"] for call in state["gh_calls"]),
+            1,
+        )
 
     def test_apply_fast_forwards_existing_pr_after_new_local_commit(self) -> None:
         first_environment = self.environment()
@@ -688,6 +724,24 @@ class WorkflowIntegrationTests(unittest.TestCase):
             cwd=self.root,
         ).stdout.strip()
         self.assertEqual(remote_head, self.head_sha)
+
+    def test_final_verification_failure_does_not_emit_success_receipt(self) -> None:
+        state = json.loads(self.state_path.read_text(encoding="utf-8"))
+        state["corrupt_final_view"] = True
+        self.state_path.write_text(json.dumps(state), encoding="utf-8")
+
+        result = subprocess.run(
+            self.command("apply"),
+            cwd=self.repo,
+            env=self.environment(),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("headRefOid", result.stderr)
 
     def test_apply_discovers_fork_push_remote(self) -> None:
         run(
@@ -833,6 +887,45 @@ class WorkflowIntegrationTests(unittest.TestCase):
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("auto-closing", result.stderr)
+
+    def test_batched_commit_log_preserves_multiple_subjects_and_full_messages(self) -> None:
+        (self.repo / "follow-up.txt").write_text("follow-up\n", encoding="utf-8")
+        run(["git", "add", "follow-up.txt"], cwd=self.repo)
+        run(
+            [
+                "git",
+                "-c",
+                "commit.gpgsign=false",
+                "commit",
+                "-m",
+                "fix(cli): preserve multilingual PR evidence",
+                "-m",
+                "保留多语言提交正文。\n\nResolves #321",
+            ],
+            cwd=self.repo,
+        )
+
+        planned = json.loads(
+            run(self.command("plan"), cwd=self.repo, env=self.environment()).stdout
+        )
+        self.assertEqual(
+            [commit["subject"] for commit in planned["commits"]],
+            [
+                "feat(cli): add deterministic PR submission",
+                "fix(cli): preserve multilingual PR evidence",
+            ],
+        )
+
+        forbidden = subprocess.run(
+            self.command("plan", "--issue-policy", "forbid"),
+            cwd=self.repo,
+            env=self.environment(),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotEqual(forbidden.returncode, 0)
+        self.assertIn("auto-closing", forbidden.stderr)
 
     def test_draft_and_existing_body_are_verified(self) -> None:
         environment = self.environment()
