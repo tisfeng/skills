@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the structure and local references of every published skill."""
+"""Validate published skills, local references, and repository discovery entries."""
 
 from __future__ import annotations
 
@@ -81,6 +81,41 @@ def validate_conflict_markers() -> list[str]:
     return errors
 
 
+def validate_discovery_entries(skill_directories: Sequence[Path]) -> list[str]:
+    errors: list[str] = []
+    discovery_root = REPOSITORY_ROOT / ".agents" / "skills"
+    if discovery_root.is_symlink() or not discovery_root.is_dir():
+        return [".agents/skills: must be a real directory containing discovery entries"]
+
+    published_names = {directory.name for directory in skill_directories}
+    for name in sorted(published_names):
+        entry = discovery_root / name
+        label = entry.relative_to(REPOSITORY_ROOT)
+        expected_target = Path("../../skills") / name
+        if not entry.is_symlink():
+            errors.append(f"{label}: create a relative symlink to {expected_target}")
+        elif entry.readlink() != expected_target:
+            errors.append(f"{label}: symlink must target {expected_target}")
+        elif not (entry / "SKILL.md").is_file():
+            errors.append(f"{label}: broken skill link; restore skills/{name}/SKILL.md")
+
+    release = discovery_root / "release"
+    if release.is_symlink() or not release.is_dir():
+        errors.append(".agents/skills/release: preserve the internal skill as a real directory")
+
+    for entry in sorted(discovery_root.iterdir()):
+        if entry.name in published_names:
+            continue
+        if entry.is_symlink():
+            errors.append(
+                f"{entry.relative_to(REPOSITORY_ROOT)}: unexpected symlink; "
+                "only published skills may have discovery links"
+            )
+        elif entry.is_dir():
+            errors.extend(validate_skill(entry))
+    return errors
+
+
 def validate_readme_catalog(skill_directories: Sequence[Path]) -> list[str]:
     errors: list[str] = []
     expected_names = {directory.name for directory in skill_directories}
@@ -129,6 +164,7 @@ def main() -> int:
         names.add(skill_directory.name)
         errors.extend(validate_skill(skill_directory))
 
+    errors.extend(validate_discovery_entries(skill_directories))
     errors.extend(validate_readme_catalog(skill_directories))
     errors.extend(validate_conflict_markers())
     if errors:
@@ -136,7 +172,7 @@ def main() -> int:
             print(error, file=sys.stderr)
         return 1
 
-    print(f"Validated {len(skill_directories)} skills")
+    print(f"Validated {len(skill_directories)} skills and repository discovery entries")
     return 0
 
 

@@ -33,6 +33,8 @@
   `node --test tests/agents-installer.test.mjs`。
 - 修改 Python 时运行针对性单测与 `python3.12 -m compileall -q scripts skills`；修改 Shell 时运行
   `bash -n`；修改 JSON 或 YAML 时使用对应的解析器检查。
+- 修改项目技能发现入口或其校验器时运行 `python3.12 scripts/validate-skills.py` 和
+  `python3.12 -m unittest discover -s tests -p 'test_validate_skills.py'`，检查公开链接与内部技能。
 - 文档结构变化时检查现行相对链接、锚点和已删除路径引用。仓库校验脚本使用 `tomllib`，应选用
   Python 3.11 或更高版本。
 

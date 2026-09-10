@@ -11,7 +11,7 @@
 - `docs/histories/`：最终产生仓库文件差异的 implementation 记录。
 - `skills/`：对外发布的 Agent Skill 源码。
 - `.codex/agents/`：对外发布的 Codex 子代理配置。
-- `.agents/skills/`：本仓库内部使用的项目专属 Skill，不列入公开 Skill 目录。
+- `.agents/skills/`：项目技能发现入口，包含公开源码的相对目录链接和项目专属 Skill 实目录。
 - `docs/release/`：版本发布流程与每个公开版本的用户可见日志。
 
 历史、completed plan 和参考资料是证据，不是当前执行指令。只有当前用户请求、适用的
@@ -50,12 +50,18 @@
 受管副本。两者是独立安装单元：前者由 `npx skills` 管理，后者由 `@tisfeng/codex-agents` 的
 安装器管理。
 
-`.agents/skills/` 可存放本仓库内部使用的标准 Skill 格式；它不属于 `skills/` 的公开目录，也不进入
-本 npm package 的 `files` 载荷。项目专属流程的现行说明放在对应的 `docs/` 文档，不复制为公开 Skill。
+`.agents/skills/` 为 Codex 提供项目技能发现入口，不进入本 npm package 的 `files` 载荷：
+
+- 每个公开技能使用 `.agents/skills/<name> -> ../../skills/<name>` 相对目录链接，链接随 Git
+  保存，`skills/<name>/` 始终是唯一源码。新增或删除公开技能时同步维护对应链接。
+- `release` 等项目专属技能保留实目录，不列入公开 `skills/` 目录。项目专属流程的现行说明放在
+  对应的 `docs/` 文档，不复制为公开 Skill。
+- 不通过安装器向本仓库复制自身技能，也不为这些源码链接创建消费方 lock。
+- 本仓库任务使用当前 checkout 的技能源码。同名全局技能可能并存，调用时确认实际加载路径；
+  技能未刷新时重新启动 Codex。其他宿主的发现目录和符号链接支持需分别核实。
 
 - 修改通用行为、公开 Skill 脚本、测试或 agent TOML 时，直接在本仓库完成验证；不要改写为下游
-  项目的 `.agents/skills/` 路径。本仓库明确维护的项目内部 `.agents/skills/` 除外，且必须与公开
-  `skills/` 保持职责分离。
+  项目的 `.agents/skills/` 路径。本仓库的发现链接与项目专属实目录按上面的职责维护。
 - 下游项目的 lock、来源选择、内容哈希和本地例外属于消费方治理；本仓库不创建或维护这些消费方
   快照。
 - 发布 tag 不自动授权 npm 发布、GitHub release、push 或用户全局安装；这些外部动作仍需明确授权。

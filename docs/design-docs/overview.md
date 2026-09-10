@@ -33,13 +33,19 @@
 | `docs/design-docs/` | 长期设计理由 | 记录为什么采用重要边界或策略 |
 | `docs/exec-plans/` | 执行过程 | 记录获准工作的目标、风险、进度和验证 |
 | `docs/histories/` | 完成结果 | 记录已落地变更及其关键背景 |
-| `.agents/skills/` | 项目内部 Skill | 提供当前仓库专属的标准 Skill 格式工作流 |
+| `.agents/skills/` | 项目技能发现入口 | 通过相对链接使用公开源码，并保存项目专属 Skill 实目录 |
 | `docs/release/` | 发布流程和日志 | 说明发布步骤，并保存每个公开版本的 Release 正文 |
 
 `skills/` 是 `npx skills add` 识别的 Skill 源码；`.codex/agents/` 是 Codex 原生发现的项目级
 子代理配置。两者共用仓库 tag，但安装、lock 和升级逻辑各自独立。`bin/codex-agents.mjs` 从指定
 源码读取 `.codex/agents/*.toml`，在项目级或全局级安装，并拒绝覆盖本地修改过的同名角色，除非
 用户明确使用覆盖选项。
+
+公开技能通过 `.agents/skills/<name> -> ../../skills/<name>` 逐项链接供本仓库自用。
+Codex 的项目发现目录与源码分发目录不同；链接让当前 checkout 的修改直接可读，也避免复制后
+出现两份内容。逐项链接保留了内部 `release` 实目录，相对路径可随 checkout 和 worktree 移动。
+不整体搬迁公开目录，也不把整个 `.agents/skills/` 替换成链接；维护规则见
+[`源码资产与安装边界`](../agents/README.md#源码资产与安装边界)。
 
 ## 非目标
 
