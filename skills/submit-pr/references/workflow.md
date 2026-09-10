@@ -55,6 +55,30 @@ apply 先 fetch 精确 base ref，再要求 `<base-remote>/<base>` 是 HEAD 的�
 PR 标题使用 Angular-style `type(scope): subject`，说明主要行为。Summary 解释实际改动及原因；
 Verification 只列出实际执行的检查及结果；Issue 仅使用用户提供或有明确证据的引用。
 
+### 用户语言
+
+调用 Agent 在起草前按顺序从第一个可用来源解析 `{USR_PREFERRED_LANGUAGE}`：
+
+1. 当前请求或对话中明确的语言偏好。
+2. 当前对话的主要交流语言。
+3. 可读取的用户系统首选语言，例如 macOS `AppleLanguages`、POSIX `LC_ALL`、
+   `LC_MESSAGES`、`LANG`、`locale` 或 Windows PowerShell culture 输出。
+4. 以上均无法确定时使用英语。
+
+目标仓库明确要求特定 PR 语言时，将其作为独立硬约束并在预览中说明；若它与用户明确偏好冲突，
+停止并请求用户决定。英文模板、提交信息、分支名或单独的英文终端 locale 不能覆盖已经确定的对话
+语言，也不能单独视为仓库语言要求。
+
+PR 默认使用一种首选语言。标题的 subject、Summary、Verification、调用 Agent 自拟的 Issue 或截图
+说明、`--extra-body-file` 中由 Agent 新写的内容，以及用户可见的最终报告都使用该语言；只有用户或
+仓库明确要求时才生成双语内容。Angular `type(scope)`、Issue 关键字、命令、路径、branch、SHA、
+API、产品名和检查名等技术标识保留原文。
+
+模板原有标题、说明、checklist 和顺序继续按下文保留；英文模板不要求插入内容也使用英文。无模板
+时的固定双语标题、`N/A` 和 helper 固定截图提示属于稳定结构，不参与语言推断。调用 Agent 在运行
+helper 前负责检查草稿与首选语言一致，并在 PR 预览中显示语言及来源；helper 只校验和原样渲染
+传入内容，不检测语言或翻译。
+
 目标仓库模板优先保留原有标题、顺序、非占位说明和 checklist。以下语义标题会接收调用方
 提供的内容：
 

@@ -25,8 +25,8 @@ Agent 或项目路径中。
 
 ## 必需流程
 
-1. 先确定用户模式和限制，阅读 [工作流契约](references/workflow.md)。正文标准、模板、Issue 策略、拓扑、
-   身份验证和恢复规则以该文档为准。
+1. 先确定用户模式和限制，阅读 [工作流契约](references/workflow.md)。用户语言、正文标准、模板、
+   Issue 策略、拓扑、身份验证和恢复规则以该文档为准。
 2. 运行 `git status --short --branch`，记录 HEAD 与 staged、unstaged、untracked 边界。
 3. **纯 plan**：只检查现有提交与缓存，按工作流契约起草内容并运行 helper `plan`，展示完整
    PR 预览后停止。无新增提交或缺少 cached base 时，报告已有证据和预览缺口；不为使预览
@@ -43,8 +43,9 @@ Agent 或项目路径中。
 
    - 检查完整 `<base-remote>/<base>..HEAD` 提交和文件范围；无关、为空、来源不明或 HEAD
      未包含 base 时停止，不自动 rebase、merge 或修正历史。
-5. 按工作流契约起草内容，运行 helper `plan` 渲染并展示完整 PR 预览；默认模式继续，
-   用户要求确认或暂缓时遵守限制。禁止使用可能 push 的 `gh pr create --dry-run`。
+5. 按工作流契约解析用户首选语言及来源，再起草内容。运行 helper `plan` 渲染并展示首选语言、
+   语言来源和完整 PR 预览；语言与正文不一致时先修正，不把自然语言判断交给 helper。默认模式
+   继续，用户要求确认或暂缓时遵守限制。禁止使用可能 push 的 `gh pr create --dry-run`。
 6. 使用 helper `apply` 重新核对状态、fetch base、精确推送并创建或复用 PR；draft 追加 `--draft`。
    最终报告 PR URL、base/head repository 与 branch、head SHA、Draft 状态、分支/push/PR 动作
    及截图提醒。本轮创建过提交时，一并保留 `git-commit` 的完整回执，Push 字段反映实际结果。
