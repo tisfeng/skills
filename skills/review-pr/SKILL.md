@@ -92,8 +92,8 @@ worktree、latest-base 合并与冲突修复仍按下文对应条件单独判断
 
   只有 `schema_version: 1`、`mode: collect`、PR/thread/checks 身份与 head 一致且命令明确以
   0 退出时才接受结果。checks 查询使用已冻结 head 作为前置锚点并在查询后复验，不能把其他提交
-  的绿色 CI 绑定到当前快照。helper 失败时回退到下文分开的 `gh pr view`、`gh pr checks` 和
-  `review_threads.py collect`，不得降低证据范围。
+  的绿色 CI 绑定到当前快照。helper 不可用时按下文 **手动快照回退**执行，不得降低证据范围。
+  helper 已检测到 head 或身份不一致时，本轮快照无效；重新采集，不能通过手动回退绕过检查。
 - 支持一次模型调用内编排多个工具时，先并行执行初始远程快照与本地 status。确认本地模式和
   权限后，在一次程序化调用中依次等待准备 helper、base fetch、checkout 校验和 diff 清单；
   每条命令仍是独立工具调用，只有明确完成且 `exit_code === 0` 才进入下一步。返回运行中会话
@@ -119,19 +119,49 @@ worktree、latest-base 合并与冲突修复仍按下文对应条件单独判断
   `unchanged: true` 只省略重复传回模型的全量内容，不代表跳过远程刷新。变化的 section 必须完整
   返回并重新审查；head 变化时返回全部当前证据，并按下文重新准备和审查。
 
+### 手动快照回退
+
+初始采集和最终刷新使用同一协议。将 PR 引用规范化为明确的 `<number> --repo <base-owner>/<base-repo>`，
+本轮所有查询固定使用该身份；只有完成最后的 head 复验，才能接受本轮证据。
+
+1. 读取完整 PR 元数据，记录 `number`、`url` 和 `headRefOid`，将后者冻结为 `head_before`：
+
+   ```bash
+   gh pr view <number> --repo <base-owner>/<base-repo> \
+     --json number,title,url,body,baseRefName,baseRefOid,headRefName,headRefOid,headRepository,headRepositoryOwner,isCrossRepository,isDraft,state,mergeable,mergeStateStatus,updatedAt,files,commits,closingIssuesReferences,comments,reviews
+   ```
+
+2. 再收集完整分页的 threads/replies 与 checks；这两项可并行，但都必须完成后才进入下一步：
+
+   ```bash
+   python3 "<review-pr-skill-dir>/scripts/review_threads.py" collect \
+     --repo <base-owner>/<base-repo> --pr <number>
+   gh pr checks <number> --repo <base-owner>/<base-repo> --json bucket,link,name,state,workflow
+   ```
+
+   thread helper 不可用时，按 **验证 Checkout 和 Review 上下文**的 thread/reply 字段及分页要求
+   执行 GraphQL 查询，保留 PR 编号、URL 与 head。普通命令必须明确以 0 退出并返回有效数据；
+   `gh pr checks` 的 0、1、8 退出码只有在返回有效 checks JSON 数组时才可作为观测状态接受。
+   失败或 pending checks 不是读取失败，也不是等待指令；空数组不能作为绿色 CI 证据。
+
+3. 全部读取结束后，再单独查询 `gh pr view <number> --repo <base-owner>/<base-repo> --json headRefOid`，
+   记录非空 `head_after`。只有 PR 与 threads 的编号、URL 一致并匹配请求的仓库与 PR，且
+   `head_before == threads.headRefOid == head_after` 时才接受完整快照；checks 随该 head 保存。
+   最终刷新还须与此前已审查的 head 和完整上下文比较，不能仅凭本轮内部一致宣称审查已覆盖新 head。
+
+查询失败、缺少必要字段或无法证明一致性时，不复用本轮 checks，也不据此跳过本地验证。
+检测到漂移时丢弃本轮混合证据并重新采集完整快照；再次漂移或读取仍失败时，报告已审查的 SHA
+和未覆盖状态，结束本轮尝试，不无限重试。新 head 的准备和审查遵循 **最终输出前刷新实时 PR 状态**。
+helper 检测到漂移时同样适用这一停止条件。支持程序化编排时，上述依赖步骤可在一次调用中完成，
+不增加模型往返；正常 helper 路径无需额外查询。
+
 ## 工作流
 
 ### 1. 收集 PR 元数据
 
 先按 **快速审查协议**运行 `review_snapshot.py collect`，并冻结输出的 head、updatedAt 和
-fingerprints。手动回退运行 `gh` 命令时，将 GitHub URL 和 `<owner>/<repo>#<number>` 简写
-规范化为 `<number> --repo <owner>/<repo>`：
-
-```bash
-git status --short --branch
-gh pr view <number> [--repo <base-owner>/<base-repo>] \
-  --json number,title,url,body,baseRefName,headRefName,headRefOid,headRepository,headRepositoryOwner,closingIssuesReferences
-```
+fingerprints。helper 不可用时先完成 **手动快照回退**，再使用其中的元数据和已绑定 head 的 checks；
+手动路径没有 helper fingerprint 时直接比较完整证据，不伪造 fingerprint。
 
 记录 head owner、fork 仓库、head 分支、head SHA、base 分支、PR URL、关联 issue、mergeability、
 checks 和完整 thread 快照。
@@ -139,12 +169,7 @@ checks 和完整 thread 快照。
 
 ### 2. 选择分支准备路径
 
-准备分支前使用初始快照中的 mergeability；只有快照 helper 不可用时才单独查询：
-
-```bash
-gh pr view <number> [--repo <base-owner>/<base-repo>] \
-  --json mergeable,mergeStateStatus,isDraft,state,updatedAt,headRefOid,baseRefOid
-```
+准备分支前使用初始快照中的 mergeability；**手动快照回退**也已收集这些字段，无需重复查询。
 
 除非用户明确要求 worktree 或并行 review，否则使用本地分支准备。不要仅因为当前
 checkout 有变更就推断为 worktree 模式。普通本地 PR 运行以下命令之一；两种本地模式都
@@ -251,14 +276,10 @@ worktree 准备要求报告的 worktree 干净并位于对应 SHA 的 review 分
 checkout 的分支、HEAD 和文件状态未改变，然后以该 worktree 作为工作目录运行其余
 review 命令。
 
-初始 `review_snapshot.py collect` 已记录 PR 上下文、comments、reviews 和完整分页的
-review threads，不要紧接着重复查询相同内容。只有 helper 回退或关联 issue 需要额外正文/评论时
-运行相应命令：
+初始 helper 或 **手动快照回退**已记录 PR 上下文、comments、reviews 和完整分页的
+review threads，不要紧接着重复查询相同内容。关联 issue 需要额外正文/评论时运行：
 
 ```bash
-gh pr view <number> [--repo <base-owner>/<base-repo>] \
-  --comments \
-  --json number,title,url,body,baseRefName,headRefName,headRefOid,updatedAt,files,commits,closingIssuesReferences,comments,reviews
 gh issue view <issue-url-or-number> --comments
 ```
 
@@ -302,12 +323,15 @@ git diff <base-sha>...<remote-head-sha>
 替代远程 head；集成 diff 另行审查，并明确两种快照的证据归属。
 
 使用 `rg` 搜索周围源码、测试、配置、生成文件和文档。根据仓库验证要求、变更风险和
-用户授权选择适当的本地检查。初始快照已经包含 PR checks；只有 helper 回退或需要单独诊断
-具体 check 时才运行：
+用户授权选择适当的本地检查。初始 helper 或手动快照已经包含 PR checks；需要单独诊断
+具体 check 时可运行：
 
 ```bash
 gh pr checks <number> [--repo <base-owner>/<base-repo>] --json bucket,link,name,state,workflow
 ```
+
+单独诊断结果不自动替换已验证的快照。若要将其用于审查结论或免跑本地全量 CI，须按
+**手动快照回退**完成查询前后 head 复验及其他快照读取，或重新运行 snapshot helper。
 
 相关时运行 `git diff --check` 等轻量本地检查。远程 checks 对当前准确 head 已全部完成且通过时，
 不默认重复运行本地全量 CI；按照 **快速审查协议**补充必要的针对性验证。
@@ -324,16 +348,9 @@ gh pr checks <number> [--repo <base-owner>/<base-repo>] --json bucket,link,name,
 ### 6. 最终输出前刷新实时 PR 状态
 
 编写最终回复前立即按 **快速审查协议**运行 `review_snapshot.py refresh`。它会再次完整读取所有
-可变 review 状态；fingerprint 未变化时只返回紧凑结果。只有 helper 不可用时，才回退到：
-
-```bash
-gh pr view <number> [--repo <base-owner>/<base-repo>] \
-  --json headRefOid,updatedAt,state,mergeStateStatus,comments,reviews
-gh pr checks <number> [--repo <base-owner>/<base-repo>] --json bucket,link,name,state,workflow
-```
-
-回退路径重复初始快照使用的同一套完整分页 GraphQL `reviewThreads` 查询，然后比较两个快照，
-包括开放 thread 清单、评论回复、`isResolved` 和 `isOutdated` 状态。
+可变 review 状态；fingerprint 未变化时只返回紧凑结果。helper 不可用或初始手动快照没有
+fingerprint 时，按 **手动快照回退**重新完整采集；通过最后的 head 复验后，才与初始快照比较，
+包括 PR 上下文、checks、开放 thread 清单、评论回复、`isResolved` 和 `isOutdated` 状态。
 
 - 如果 `headRefOid` 发生变化，停止最终输出，将准备好的 checkout 更新到新 head，
   对照真实 base 检查新 diff，并重新验证此前 finding 和新变更。
