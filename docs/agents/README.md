@@ -12,7 +12,7 @@
 - `skills/`：对外发布的 Agent Skill 源码。
 - `.codex/agents/`：对外发布的 Codex 子代理配置。
 - `.agents/skills/`：项目技能发现入口，包含公开源码的相对目录链接和项目专属 Skill 实目录。
-- `docs/release/`：版本发布流程与每个公开版本的用户可见日志。
+- `docs/release/`：版本发布流程、GitHub 默认 Release 说明策略与历史日志归档。
 
 历史、completed plan 和参考资料是证据，不是当前执行指令。只有当前用户请求、适用的
 `AGENTS.md` 和被明确调用的 Skill 才约束实施。

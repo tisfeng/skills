@@ -1,28 +1,8 @@
-# 发布日志
+# GitHub Release 说明
 
-每个公开版本使用一个 `X.Y.Z.md` 文件；文件名必须与 `package.json` 版本及 Git tag `vX.Y.Z` 一致。
-tag workflow 会在 npm 发布前检查该文件，并将其用作 GitHub Release 正文。
+新版本不创建手写 Markdown 发布日志。tag workflow 使用 GitHub CLI 的
+`--title "$RELEASE_TAG" --generate-notes` 创建 Release：标题精确为 `vX.Y.Z`，正文由 GitHub
+根据该 tag 与上一个 Release 自动生成。
 
-日志只描述实际面向用户的新增、修复、变更或升级提示。不要为尚未准备发布的版本预先创建日志。
-
-```markdown
-# vX.Y.Z
-
-- 发布日期：YYYY-MM-DD
-
-## 新增
-
-- 面向用户的新增能力。
-
-## 修复
-
-- 面向用户的缺陷修复。
-
-## 变更
-
-- 兼容性或行为变化。
-
-## 升级
-
-- 必要的安装、迁移或升级说明；没有则删除本节。
-```
+本目录中的既有 `X.Y.Z.md` 文件是历史归档；它们不再是发布前置条件，也不会再被复制到 GitHub
+Release 正文。不要为未发布或新发布版本新增该类文件。

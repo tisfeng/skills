@@ -42,17 +42,6 @@ jobs:
             exit 1
           fi
 
-      - name: Verify release changelog
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: |
-          release_version="${RELEASE_TAG#v}"
-          changelog_path="docs/release/changelog/$release_version.md"
-          if [[ ! -s "$changelog_path" ]]; then
-            echo "Release changelog $changelog_path is missing or empty." >&2
-            exit 1
-          fi
-
       - name: Verify release commit is on main
         run: |
           git fetch --no-tags origin main
@@ -131,10 +120,9 @@ jobs:
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "GitHub Release $RELEASE_TAG already exists."
           else
-            release_notes="docs/release/changelog/${RELEASE_TAG#v}.md"
             gh release create "$RELEASE_TAG" \
               --repo "$GITHUB_REPOSITORY" \
               --verify-tag \
-              --notes-file "$release_notes" \
-              --title "Skills $RELEASE_TAG"
+              --title "$RELEASE_TAG" \
+              --generate-notes
           fi
