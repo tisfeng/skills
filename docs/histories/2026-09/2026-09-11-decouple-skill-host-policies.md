@@ -95,3 +95,29 @@ git-commit 的 worktree 预检，以及缺少 git-commit 且需要提交的 subm
 证明 helper 的独立运行与不写入边界，不代表实际 Agent 已理解所有项目政策。
 
 第二阶段同样未修改 Scoco、全局安装、安装器或版本号，未 push、发布或操作真实 PR。
+
+## 第三阶段：PR 身份校验一致性
+
+用户明确本任务的解耦目标是 Skill 自行完善并完整执行任务，升级不需要消费项目修改 Agent
+规则补救；本轮仅授权修复 PR 身份校验不一致。此前关于放宽提交格式和 PR 模板的建议撤回，
+本阶段不实施格式覆盖、模板、worktree 布局或发布流程调整。
+
+本阶段从 `main` 的 `279633296dfa4070435195616ba08cb9c4fd167f` 开始，初始索引、工作树与
+未跟踪内容均为空。修改范围限于 review-pr 内部身份处理、相关测试和协议说明，以及本记录；
+宿主 `AGENTS.md`、`docs/agents/`、其他 Skill 和外部安装均不变。
+
+采集、线程 URL、末尾身份复验和缓存准备改为复用同目录 `pr_identity.py`，旧快照仓库比较
+也使用同一规则。owner/repo 忽略大小写，PR URL 统一限定 HTTPS GitHub 身份；分支名、SHA、
+PR 编号及存储哈希继续严格校验。比较不改写原始证据或指纹算法，不增加调用参数或宿主步骤。
+
+新增采集回归在修复前复现了仅因仓库大小写不同而错误拒绝的行为。隔离消费者首跑发现旧
+fake gh 响应使用了未受支持的 `fake.github.test` 主机；仅将 fixture 的 PR URL 改为
+`github.com`，仍使用假命令与本地隔离，不放宽生产校验。复跑消费者测试 3 项通过。
+
+`PYTHONDONTWRITEBYTECODE=1 python3.12 -m unittest discover -s skills/review-pr/tests -p 'test_*.py'`
+共 99 项通过。新用例覆盖混合大小写的采集→实际保存→metadata CLI 复用，以及不再查询 gh 的
+缓存准备；错误主机、PR 编号、head、存储哈希仍被拒绝，head/base 大小写漂移仍不被接受。
+结构校验、Python 编译、Markdown 链接及 diff 检查通过。独立 review 检查生产与最终测试，无发现。
+
+验证使用模拟 gh、临时本地 remote 和 helper 子进程，没有操作真实 GitHub PR。本轮仅创建
+本地提交，不 push、发布或更新消费项目；用户未采纳的其他审计建议未实施。

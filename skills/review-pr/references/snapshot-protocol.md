@@ -45,6 +45,10 @@ bash "<review-pr-skill-dir>/scripts/prepare-pr-branch.sh" \
 重新采集；不要去掉守卫重试。缓存只是冻结的输入，helper 仍实际 fetch、比较 head、冻结 base、
 验证本地状态；后续最终刷新仍检查实时 PR，包括 base retarget。
 
+采集、末尾复验和缓存准备共用 Skill 内部的 PR 身份比较：GitHub owner/repo 忽略大小写，
+URL 必须属于 `https://github.com` 且对应同一 PR。分支名、SHA 和文件哈希仍精确比较。
+比较不改写原始快照、URL 或内容指纹；仓库名大小写不同不要求重新采集或修改宿主规则。
+
 ## 最终刷新与线程差量
 
 初始证据仍完整可用时，可以给正常 refresh 命令增加：

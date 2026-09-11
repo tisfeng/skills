@@ -277,7 +277,9 @@ class PreparePRBranchTests(unittest.TestCase):
         repo: str = "iftechio/Scoco",
         number: int = 42,
         head_sha: Optional[str] = None,
+        pr_head_sha: Optional[str] = None,
         url: Optional[str] = None,
+        path_suffix: str = "",
     ) -> tuple[Path, str]:
         frozen_head = head_sha or self.head_sha
         snapshot = {
@@ -288,7 +290,7 @@ class PreparePRBranchTests(unittest.TestCase):
             "pr": {
                 "number": number,
                 "url": url or f"https://github.com/{repo}/pull/{number}",
-                "headRefOid": frozen_head,
+                "headRefOid": pr_head_sha or frozen_head,
                 "headRefName": "feat/review-fixture",
                 "headRepositoryOwner": {"login": "contributor"},
                 "headRepository": {"name": "Scoco"},
@@ -296,7 +298,7 @@ class PreparePRBranchTests(unittest.TestCase):
                 "baseRefOid": self.base_sha,
             },
         }
-        path = self.root / f"saved-snapshot-{self._testMethodName}.json"
+        path = self.root / f"saved-snapshot-{self._testMethodName}{path_suffix}.json"
         return path, snapshot_transport.save(path, snapshot, {"mode": "full"})
 
     def _assert_source_not_prepared(self, branch: str, head: str) -> None:
@@ -420,6 +422,31 @@ class PreparePRBranchTests(unittest.TestCase):
         self._assert_fetches_once_per_remote()
         self._assert_clean_status()
 
+    def test_saved_snapshot_reuses_mixed_case_github_identity_without_calling_gh(self) -> None:
+        snapshot_path, snapshot_hash = self._write_saved_snapshot(
+            repo="IFTECHIO/sCoCo",
+            url="https://github.com/iftechio/Scoco/pull/42",
+        )
+
+        result = self._prepare(
+            "--json",
+            "--snapshot-file",
+            str(snapshot_path),
+            "--snapshot-sha256",
+            snapshot_hash,
+            "--expected-head",
+            self.head_sha,
+            pr_ref="iftechio/SCOCO#42",
+            reject_gh=True,
+        )
+        receipt = self._json_receipt(result)
+
+        self.assertEqual(receipt["status"], "prepared")
+        self.assertEqual(receipt["head_sha"], self.head_sha)
+        self.assertEqual(self._gh_calls(), [])
+        self._assert_fetches_once_per_remote()
+        self._assert_clean_status()
+
     def test_saved_snapshot_rejects_tampered_hash_before_preparation(self) -> None:
         snapshot_path, snapshot_hash = self._write_saved_snapshot()
         snapshot_path.write_bytes(snapshot_path.read_bytes() + b" ")
@@ -466,6 +493,45 @@ class PreparePRBranchTests(unittest.TestCase):
         self.assertEqual(self._gh_calls(), [])
         self.assertEqual(self._fetch_calls(), [])
         self._assert_source_not_prepared(source_branch, source_head)
+
+    def test_saved_snapshot_rejects_wrong_url_or_nested_head_before_preparation(self) -> None:
+        cases = (
+            (
+                "non-GitHub URL",
+                {"url": "https://example.test/iftechio/Scoco/pull/42"},
+            ),
+            (
+                "wrong PR number in URL",
+                {"url": "https://github.com/iftechio/Scoco/pull/43"},
+            ),
+            ("PR head differs from frozen head", {"pr_head_sha": self.base_sha}),
+        )
+        for index, (name, options) in enumerate(cases):
+            with self.subTest(case=name):
+                snapshot_path, snapshot_hash = self._write_saved_snapshot(
+                    **options,
+                    path_suffix=f"-{index}",
+                )
+                source_branch = self._git("branch", "--show-current").stdout.strip()
+                source_head = self._git("rev-parse", "HEAD").stdout.strip()
+
+                result = self._prepare(
+                    "--json",
+                    "--snapshot-file",
+                    str(snapshot_path),
+                    "--snapshot-sha256",
+                    snapshot_hash,
+                    "--expected-head",
+                    self.head_sha,
+                    pr_ref="iftechio/Scoco#42",
+                    reject_gh=True,
+                )
+
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("identity", result.stderr.lower())
+                self.assertEqual(self._gh_calls(), [])
+                self.assertEqual(self._fetch_calls(), [])
+                self._assert_source_not_prepared(source_branch, source_head)
 
     def test_saved_snapshot_requires_explicit_reference_and_expected_head(self) -> None:
         snapshot_path, snapshot_hash = self._write_saved_snapshot()

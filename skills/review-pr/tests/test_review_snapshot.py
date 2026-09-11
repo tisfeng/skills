@@ -210,6 +210,108 @@ class ReviewSnapshotTests(unittest.TestCase):
             ):
                 review_snapshot.collect_snapshot("owner/repo", 42)
 
+    def test_collect_accepts_github_repository_case_variation_and_preserves_raw_values(self) -> None:
+        initial = pr_payload()
+        initial["url"] = "https://github.com/IfTechIO/Scoco/pull/42"
+        threads = thread_payload()
+        threads["url"] = "https://github.com/iftechio/SCOCO/pull/42"
+        final = pr_identity(url="https://github.com/IFTECHIO/scoco/pull/42")
+        with (
+            patch.object(review_snapshot, "collect_pr", return_value=initial),
+            patch.object(review_snapshot.review_context, "collect", return_value={"issues": []}),
+            patch.object(review_snapshot.review_threads, "collect", return_value=threads),
+            patch.object(review_snapshot, "collect_checks", return_value=check_payload()),
+            patch.object(review_snapshot, "collect_pr_identity", return_value=final),
+        ):
+            snapshot = review_snapshot.collect_snapshot("iftechio/SCOCO", 42)
+
+        self.assertEqual(snapshot["repo"], "iftechio/SCOCO")
+        self.assertEqual(snapshot["pr"]["url"], initial["url"])
+        self.assertEqual(snapshot["threads"]["url"], threads["url"])
+
+    def test_collected_mixed_case_snapshot_is_reused_by_metadata_cli(self) -> None:
+        head = "a" * 40
+        initial = pr_payload(head=head)
+        initial["url"] = "https://github.com/IfTechIO/Scoco/pull/42"
+        initial["headRepository"] = {"name": "Scoco"}
+        initial["headRepositoryOwner"] = {"login": "contributor"}
+        threads = thread_payload(head=head)
+        threads["url"] = "https://github.com/iftechio/SCOCO/pull/42"
+        final = pr_identity(
+            url="https://github.com/IFTECHIO/scoco/pull/42",
+            head=head,
+        )
+        with (
+            patch.object(review_snapshot, "collect_pr", return_value=initial),
+            patch.object(review_snapshot.review_context, "collect", return_value={"issues": []}),
+            patch.object(review_snapshot.review_threads, "collect", return_value=threads),
+            patch.object(review_snapshot, "collect_checks", return_value=check_payload(head=head)),
+            patch.object(review_snapshot, "collect_pr_identity", return_value=final),
+        ):
+            snapshot = review_snapshot.collect_snapshot("iftechio/SCOCO", 42)
+
+        with tempfile.TemporaryDirectory() as directory:
+            saved_path = Path(directory) / "snapshot.json"
+            storage_hash = review_snapshot.snapshot_transport.save(
+                saved_path,
+                snapshot,
+                {"mode": "full"},
+            )
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT_PATH.parent / "prepare_pr_metadata.py"),
+                    "--snapshot-file",
+                    str(saved_path),
+                    "--storage-sha256",
+                    storage_hash,
+                    "--repo",
+                    "IFTECHIO/scoco",
+                    "--pr",
+                    "42",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            result.stdout.rstrip("\n").split("\t")[-1],
+            initial["url"],
+        )
+
+    def test_collect_keeps_head_and_base_comparisons_case_sensitive(self) -> None:
+        for field, final in (
+            ("head", pr_identity(head="HEAD-1")),
+            ("base", pr_identity(base_name="MAIN")),
+        ):
+            with self.subTest(field=field):
+                with (
+                    patch.object(review_snapshot, "collect_pr", return_value=pr_payload()),
+                    patch.object(review_snapshot.review_context, "collect", return_value={"issues": []}),
+                    patch.object(review_snapshot.review_threads, "collect", return_value=thread_payload()),
+                    patch.object(review_snapshot, "collect_checks", return_value=check_payload()),
+                    patch.object(review_snapshot, "collect_pr_identity", return_value=final),
+                ):
+                    with self.assertRaisesRegex(review_snapshot.SnapshotError, "identity changed"):
+                        review_snapshot.collect_snapshot("owner/repo", 42)
+
+    def test_collect_pr_identity_rejects_non_github_url_or_wrong_number(self) -> None:
+        for name, url in (
+            ("non-GitHub host", "https://example.test/owner/repo/pull/42"),
+            ("non-HTTPS URL", "http://github.com/owner/repo/pull/42"),
+            ("wrong PR number", "https://github.com/owner/repo/pull/43"),
+        ):
+            with self.subTest(url=name):
+                with patch.object(
+                    review_snapshot,
+                    "run_json",
+                    return_value=(pr_identity(url=url), 0),
+                ):
+                    with self.assertRaisesRegex(review_snapshot.SnapshotError, "URL"):
+                        review_snapshot.collect_pr_identity("owner/repo", 42)
+
     def test_collect_rechecks_full_identity_after_all_parallel_collectors_finish(self) -> None:
         """The closing identity read must happen after, rather than alongside, collectors."""
 

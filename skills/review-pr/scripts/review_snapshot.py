@@ -13,7 +13,6 @@ import subprocess
 import sys
 import time
 from typing import Any, Callable
-from urllib.parse import urlsplit
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -23,6 +22,7 @@ if str(SCRIPT_DIR) not in sys.path:
 import review_threads  # noqa: E402
 import review_context  # noqa: E402
 import snapshot_transport  # noqa: E402
+from pr_identity import matches_pr_url, same_repository  # noqa: E402
 
 
 PR_FIELDS = (
@@ -143,10 +143,7 @@ def snapshot_identity(payload: Any, repo: str, number: int) -> dict[str, Any]:
     for field in IDENTITY_FIELDS[1:]:
         if not isinstance(payload.get(field), str) or not payload[field].strip():
             raise SnapshotError(f"PR identity is missing {field}; collect again")
-    url = urlsplit(payload["url"])
-    expected_path = f"/{repo}/pull/{number}"
-    if (url.scheme not in ("https", "http") or not url.netloc
-            or url.path.casefold() != expected_path.casefold() or url.query or url.fragment):
+    if not matches_pr_url(payload["url"], repo, number):
         raise SnapshotError("PR URL does not match the requested repository and number; collect again")
     return {field: payload[field] for field in IDENTITY_FIELDS}
 
@@ -259,13 +256,15 @@ def collect_snapshot(repo: str, number: int, *, issue_refs=(), discussion_refs=(
         raise SnapshotError("PR head changed during snapshot collection; collect again")
     if pr.get("headRefOid") != checks.get("headRefOid"):
         raise SnapshotError("checks do not match the collected PR head; collect again")
-    if pr.get("url") != threads.get("url"):
+    if not matches_pr_url(threads.get("url"), repo, number):
         raise SnapshotError("PR identity changed during snapshot collection; collect again")
 
     # A checks or thread guard can finish while another collector is still
     # reading. Close that gap before fingerprinting, returning or saving evidence.
     identity_after, identity_ms = measured(lambda: collect_pr_identity(repo, number))
-    changed = [field for field in IDENTITY_FIELDS if identity_before[field] != identity_after[field]]
+    changed = [field for field in IDENTITY_FIELDS
+               if (not matches_pr_url(identity_after[field], repo, number) if field == "url"
+                   else identity_before[field] != identity_after[field])]
     if changed:
         raise SnapshotError(
             "PR identity changed after parallel collection (" + ", ".join(changed) + "); collect again"
@@ -307,7 +306,7 @@ def collect_snapshot(repo: str, number: int, *, issue_refs=(), discussion_refs=(
 def reviewed_previous(snapshot, repo, number, head, expected):
     """Validate cached evidence before following any of its extra issue references."""
     try:
-        return (snapshot["schema_version"] == 1 and snapshot["repo"] == repo
+        return (snapshot["schema_version"] == 1 and same_repository(snapshot["repo"], repo)
                 and snapshot["number"] == number and snapshot["headRefOid"] == head
                 and section_fingerprints(snapshot["pr"], snapshot["threads"], snapshot["checks"]) == expected)
     except (KeyError, TypeError, ValueError):

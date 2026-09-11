@@ -30,7 +30,7 @@ import os
 import sys
 
 arguments = sys.argv[1:]
-url = "https://fake.github.test/owner/repo/pull/42"
+url = "https://github.com/owner/repo/pull/42"
 identity = {
     "number": 42, "url": url, "headRefOid": "head-1",
     "baseRefName": "main", "baseRefOid": "base-1",

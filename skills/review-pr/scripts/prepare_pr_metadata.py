@@ -6,14 +6,15 @@ import re
 import sys
 
 import snapshot_transport
+from pr_identity import matches_pr_url, same_repository
 
 
 def metadata(path, storage_hash, repo, number):
     saved = snapshot_transport.read(path, storage_hash)["snapshot"]
     pr = saved["pr"]
-    expected_url = f"https://github.com/{repo}/pull/{number}"
-    if (saved["schema_version"] != 1 or saved["repo"] != repo or saved["number"] != number
-            or pr["number"] != number or pr["url"] != expected_url
+    if (saved["schema_version"] != 1 or not same_repository(saved["repo"], repo)
+            or saved["number"] != number or pr["number"] != number
+            or not matches_pr_url(pr["url"], repo, number)
             or pr["headRefOid"] != saved["headRefOid"]):
         raise ValueError("Saved snapshot does not match the requested PR identity/head")
     owner = pr["headRepositoryOwner"]["login"]
