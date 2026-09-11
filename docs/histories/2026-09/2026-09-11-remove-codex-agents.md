@@ -48,3 +48,12 @@
 验证：`python3.12 scripts/validate-skills.py`、`compileall`、5 套 Skill 单测与隔离消费者测试
 全部通过；103 个 Markdown 文件的相对链接与锚点无失效；现行文档不再出现子代理、安装器或
 npm 包引用，仅 `docs/design-docs/overview.md` 保留说明结构性变更理由的历史描述。
+
+## 后续清理（第二轮）
+
+按用户确认删除设计文档中对已移除能力的说明：`docs/design-docs/overview.md` 不再保留修订标注、
+背景段落和重新评估条目，仓库现状由其余内容描述。同时清理本仓库与主 checkout 中被 `.gitignore`
+忽略的 `__pycache__` 缓存目录。
+
+验证：`python3.12 scripts/validate-skills.py` 通过；103 个 Markdown 文件的相对链接与锚点无
+失效；`git diff --check` 通过；现行文档不再出现已移除能力的任何说明，缓存目录数量为 0。
