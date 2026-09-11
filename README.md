@@ -34,20 +34,26 @@ PR 提交默认使用 Conventional 任务分支，也可通过现有 `--head-bra
 
 ### 项目安装（默认）
 
-在当前项目安装全部 Skills：
+在当前项目安装全部公开 Skills：
 
 ```bash
-npx skills add tisfeng/skills --skill '*' --agent codex --yes
+npx skills add tisfeng/skills --agent codex --yes \
+  --skill code-simplifier --skill git-commit --skill review \
+  --skill review-pr --skill submit-pr --skill worktree-rebase-merge
 ```
 
-Skills 写入 `.agents/skills/`，并在 `skills-lock.json` 中记录版本。请将 lock 文件提交到版本控制，确保团队使用相同的来源版本和内容。
+示例显式列出公开技能；本仓库的发布技能位于技能发现路径之外，不会被安装。Skills 写入
+`.agents/skills/`，并在 `skills-lock.json` 中记录版本。请将 lock 文件提交到版本控制，确保
+团队使用相同的来源版本和内容。
 
 ### 全局安装
 
-在 Codex 全局目录安装全部 Skills：
+在 Codex 全局目录安装全部公开 Skills：
 
 ```bash
-npx skills add tisfeng/skills --skill '*' --agent codex --yes --global
+npx skills add tisfeng/skills --agent codex --yes --global \
+  --skill code-simplifier --skill git-commit --skill review \
+  --skill review-pr --skill submit-pr --skill worktree-rebase-merge
 ```
 
 Skills 写入 `~/.codex/skills/`；全局 lock 文件由安装器在用户目录中维护，无需提交到项目仓库。

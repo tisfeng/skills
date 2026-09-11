@@ -99,20 +99,19 @@ def validate_discovery_entries(skill_directories: Sequence[Path]) -> list[str]:
         elif not (entry / "SKILL.md").is_file():
             errors.append(f"{label}: broken skill link; restore skills/{name}/SKILL.md")
 
-    release = discovery_root / "release"
-    if release.is_symlink() or not release.is_dir():
-        errors.append(".agents/skills/release: preserve the internal skill as a real directory")
-
     for entry in sorted(discovery_root.iterdir()):
         if entry.name in published_names:
             continue
-        if entry.is_symlink():
-            errors.append(
-                f"{entry.relative_to(REPOSITORY_ROOT)}: unexpected symlink; "
-                "only published skills may have discovery links"
-            )
-        elif entry.is_dir():
-            errors.extend(validate_skill(entry))
+        errors.append(
+            f"{entry.relative_to(REPOSITORY_ROOT)}: keep repository-specific skills out of the "
+            "discovery path so installers cannot copy them into consumer projects"
+        )
+
+    internal_skill = REPOSITORY_ROOT / "docs" / "agents" / "release"
+    if not internal_skill.is_dir():
+        errors.append("docs/agents/release: missing the repository-specific release skill")
+    else:
+        errors.extend(validate_skill(internal_skill))
     return errors
 
 

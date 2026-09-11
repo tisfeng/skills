@@ -1,7 +1,7 @@
 # 发布流程
 
 本流程发布本仓库的公开 Skills，由 Git tag 触发 GitHub Actions。请求语义和授权边界以
-[内部 release Skill](../../.agents/skills/release/SKILL.md) 为准。
+[内部 release Skill](../agents/release/SKILL.md) 为准。
 
 ## 准备
 

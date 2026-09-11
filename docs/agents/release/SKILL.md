@@ -8,8 +8,8 @@ description: 管理本仓库版本的发布、预检与续办；用于明确的�
 用于发布本仓库的新版本，覆盖 Git tag 与 GitHub Release。GitHub Release 标题必须
 精确使用 tag（例如 `v0.3.4`），正文由 GitHub 默认生成，不手写版本发布日志。
 
-执行前阅读 [发布流程](../../../docs/release/overview.md)，并了解
-[Release 说明策略](../../../docs/release/changelog/README.md)。
+执行前阅读 [发布流程](../../release/overview.md)，并了解
+[Release 说明策略](../../release/changelog/README.md)。
 
 ## 请求语义
 
@@ -22,5 +22,5 @@ description: 管理本仓库版本的发布、预检与续办；用于明确的�
 
 ## 执行入口
 
-准备、发布步骤、验证和失败续办统一遵循 [发布流程](../../../docs/release/overview.md)。
+准备、发布步骤、验证和失败续办统一遵循 [发布流程](../../release/overview.md)。
 普通 Git 提交使用 `git-commit`；本 Skill 不因被加载而启动发布。

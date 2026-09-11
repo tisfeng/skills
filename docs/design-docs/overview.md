@@ -17,8 +17,8 @@
       ├─ docs/agents/：当前专题规则
       └─ skills/<name>/SKILL.md：按需调用的工作流源码
 
-项目内专属能力使用 `.agents/skills/<name>/SKILL.md`；发布流程和版本日志集中在 `docs/release/`，
-不列入公开 Skill 目录。
+仓库专属技能放在发现路径之外，当前为 `docs/agents/release/SKILL.md`；发布流程和版本日志
+集中在 `docs/release/`，都不列入公开 Skill。
 ```
 
 | 位置 | 权威内容 | 主要用途 |
@@ -32,7 +32,8 @@
 | `docs/design-docs/` | 长期设计理由 | 记录为什么采用重要边界或策略 |
 | `docs/exec-plans/` | 执行过程 | 记录获准工作的目标、风险、进度和验证 |
 | `docs/histories/` | 完成结果 | 记录已落地变更及其关键背景 |
-| `.agents/skills/` | 项目技能发现入口 | 通过相对链接使用公开源码，并保存项目专属 Skill 实目录 |
+| `.agents/skills/` | 项目技能发现入口 | 通过相对链接使用公开源码，只包含公开技能 |
+| `docs/agents/release/` | 仓库专属技能 | 发布流程入口，位于技能发现路径之外 |
 | `docs/release/` | 发布流程和日志 | 说明发布步骤，并保存每个公开版本的 Release 正文 |
 
 `skills/` 是 `npx skills add` 识别的 Skill 源码，也是本仓库唯一的对外发布资产。Skills 与仓库
@@ -40,7 +41,8 @@
 
 公开技能通过 `.agents/skills/<name> -> ../../skills/<name>` 逐项链接供本仓库自用。
 项目技能发现目录与源码分发目录不同；链接让当前 checkout 的修改直接可读，也避免复制后出现
-两份内容。逐项链接保留了内部 `release` 实目录，相对路径可随 checkout 和 worktree 移动。
+两份内容。逐项链接只覆盖公开技能，仓库专属技能放在发现路径之外，安装器不会把它复制到
+消费项目，相对路径也可随 checkout 和 worktree 移动。
 不整体搬迁公开目录，也不把整个 `.agents/skills/` 替换成链接；维护规则见
 [`源码资产与安装边界`](../agents/README.md#源码资产与安装边界)。
 
