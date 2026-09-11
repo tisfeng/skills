@@ -10,8 +10,7 @@
 - `docs/exec-plans/`：获准 implementation 的多步骤工作计划。
 - `docs/histories/`：最终产生仓库文件差异的 implementation 记录。
 - `skills/`：对外发布的 Agent Skill 源码。
-- `.agents/skills/`：项目技能发现入口，包含公开源码的相对目录链接和项目专属 Skill 实目录。
-- `docs/agents/release/`：本仓库专属的发布技能，位于技能发现路径之外。
+- `.agents/skills/`：项目技能发现入口，只包含公开源码的相对目录链接。
 - `docs/release/`：版本发布流程、GitHub 默认 Release 说明策略与历史日志归档。
 
 历史、completed plan 和参考资料是证据，不是当前执行指令。只有当前用户请求、适用的
@@ -69,14 +68,14 @@
 
 - 每个公开技能使用 `.agents/skills/<name> -> ../../skills/<name>` 相对目录链接，链接随 Git
   保存，`skills/<name>/` 始终是唯一源码。新增或删除公开技能时同步维护对应链接。
-- `release` 等仓库专属技能放在发现路径之外，当前为 `docs/agents/release/SKILL.md`。它不进入
-  `skills/` 或 `.agents/skills/`，否则 `npx skills` 会把它安装到消费项目。
+- 仓库不维护专属技能：`SKILL.md` 只允许出现在 `skills/` 与 `.agents/skills/`，其他文档按
+  普通 Markdown 维护，校验脚本会拒绝其他位置。
 - 不向本仓库复制自身技能，也不为这些源码链接创建消费方 lock。
 - 本仓库任务使用当前 checkout 的技能源码。同名全局技能可能并存，调用时确认实际加载路径；
   技能未刷新时重新启动当前 Agent 运行时。其他宿主的发现目录和符号链接支持需分别核实。
 
 - 修改通用行为、公开 Skill 脚本或测试时，直接在本仓库完成验证；不要改写为下游项目的
-  `.agents/skills/` 路径。本仓库的发现链接与仓库专属技能位置按上面的职责维护。
+  `.agents/skills/` 路径。本仓库的发现链接与技能位置按上面的职责维护。
 - 下游项目的 lock、来源选择、内容哈希和本地例外属于消费方治理；本仓库不创建或维护这些消费方
   快照。
 - 发布 tag 不自动授权 GitHub release、push 或用户全局安装；这些外部动作仍需明确授权。

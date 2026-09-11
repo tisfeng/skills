@@ -106,12 +106,27 @@ def validate_discovery_entries(skill_directories: Sequence[Path]) -> list[str]:
             f"{entry.relative_to(REPOSITORY_ROOT)}: keep repository-specific skills out of the "
             "discovery path so installers cannot copy them into consumer projects"
         )
+    return errors
 
-    internal_skill = REPOSITORY_ROOT / "docs" / "agents" / "release"
-    if not internal_skill.is_dir():
-        errors.append("docs/agents/release: missing the repository-specific release skill")
-    else:
-        errors.extend(validate_skill(internal_skill))
+
+def validate_skill_locations() -> list[str]:
+    """Keep SKILL.md inside the published tree or its discovery links."""
+
+    errors: list[str] = []
+    allowed_roots = (
+        SKILLS_ROOT.resolve(),
+        (REPOSITORY_ROOT / ".agents" / "skills").resolve(),
+    )
+    for entrypoint in REPOSITORY_ROOT.rglob("SKILL.md"):
+        if ".git" in entrypoint.parts:
+            continue
+        resolved = entrypoint.resolve()
+        if any(root in resolved.parents for root in allowed_roots):
+            continue
+        errors.append(
+            f"{entrypoint.relative_to(REPOSITORY_ROOT)}: keep SKILL.md inside skills/ "
+            "or .agents/skills/"
+        )
     return errors
 
 
@@ -165,6 +180,7 @@ def main() -> int:
 
     errors.extend(validate_discovery_entries(skill_directories))
     errors.extend(validate_readme_catalog(skill_directories))
+    errors.extend(validate_skill_locations())
     errors.extend(validate_conflict_markers())
     if errors:
         for error in errors:

@@ -36,7 +36,7 @@ Install every published Skill in the current project:
 npx skills add tisfeng/skills --skill '*' --agent codex --yes
 ```
 
-`--skill '*'` matches only the published Skills under `skills/`; this repository's release skill lives outside the discovery path. Skills are written to `.agents/skills/` and recorded in `skills-lock.json`; commit the lock file so the team uses the same source revisions and content.
+`--skill '*'` matches only the published Skills under `skills/`. Skills are written to `.agents/skills/` and recorded in `skills-lock.json`; commit the lock file so the team uses the same source revisions and content.
 
 ### Global installation
 

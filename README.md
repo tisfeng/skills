@@ -40,9 +40,8 @@
 npx skills add tisfeng/skills --skill '*' --agent codex --yes
 ```
 
-`--skill '*'` 只匹配 `skills/` 下的公开技能，仓库的发布技能位于技能发现路径之外。Skills
-写入 `.agents/skills/` 并记录在 `skills-lock.json` 中；请提交 lock 文件，确保团队使用相同
-的来源与内容。
+`--skill '*'` 只匹配 `skills/` 下的公开技能。Skills 写入 `.agents/skills/` 并记录在
+`skills-lock.json` 中；请提交 lock 文件，确保团队使用相同的来源与内容。
 
 ### 全局安装
 

@@ -13,12 +13,12 @@
 
 ## 任务路由
 
-- Git 状态保护、暂存、本地提交和 worktree 集成：`docs/agents/git-workflow.md`。
+- Git 状态保护、暂存、本地提交和 worktree 集成：`docs/agents/git-delivery.md`。
 - 验证与 review：`docs/agents/build-and-test.md`。
 - 文档生命周期、外部安装边界和源码资产维护：`docs/agents/README.md`。
 - 代码、脚本、配置和文档质量：`docs/agents/development.md`。
 - 重要设计决策和本仓库资产结构：`docs/design-docs/overview.md`。
-- 版本发布技能与流程：`docs/agents/release/SKILL.md` 与 `docs/release/overview.md`。
+- 版本发布授权与流程：`docs/release/workflow.md`。
 - 具体 Skill：执行前读取 `skills/<skill-name>/SKILL.md`。
 
 ## Review 路由
@@ -42,5 +42,5 @@
   源码变更不因此授权 GitHub release、push 或修改用户全局 Codex 配置；完整资产边界见
   `docs/agents/README.md`。
 - 其余维护约束不在此复述，以对应专题文件为唯一来源：材料与写入授权见
-  `docs/agents/request-boundary.md`，Git 状态保护见 `docs/agents/git-workflow.md`，
+  `docs/agents/request-boundary.md`，Git 状态保护见 `docs/agents/git-delivery.md`，
   文档与资产生命周期见 `docs/agents/README.md`。

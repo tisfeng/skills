@@ -1,6 +1,6 @@
-# Git 工作流
+# Git 交付
 
-本文规定本仓库的 Git 授权和交付要求；请求语义、Mutation Gate 和 protected 以
+本文规定本仓库的 Git 授权与本地交付要求；请求语义、Mutation Gate 和 protected 以
 [`request-boundary.md`](request-boundary.md) 为准，plan/history 生命周期以
 [`README.md`](README.md) 为准。
 

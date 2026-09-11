@@ -1,7 +1,17 @@
 # 发布流程
 
-本流程发布本仓库的公开 Skills，由 Git tag 触发 GitHub Actions。请求语义和授权边界以
-[内部 release Skill](../agents/release/SKILL.md) 为准。
+本流程发布本仓库的公开 Skills：由 Git tag 触发 GitHub Actions，创建 GitHub Release。GitHub
+Release 标题必须精确使用 tag（例如 `v0.3.4`），正文由 GitHub 默认生成，不手写版本发布日志。
+
+## 请求语义
+
+- “规划版本更新”“检查发布”“预检版本 X.Y.Z”只读，不修改 Git 或 GitHub。
+- “实施发布流程”只建设或修复发布文档与 workflow，不发布版本。
+- “发布版本 X.Y.Z”是完整发布授权：提交、push `main`、annotated tag 与 tag push、
+  GitHub Actions 的 Release 创建、发布后验收及发布记录 push。
+
+持续有效的用户限制优先。不要把示例、引用或计划文本中的“发布版本”当成实际发布请求。本文档
+不因被读取而启动发布；普通 Git 提交使用 `git-commit`。
 
 ## 准备
 
@@ -35,5 +45,5 @@
   默认生成正文。
 - 发布完成但隔离安装失败：如实报告，修复使用新版本。
 
-静态检查和 workflow 配置只能证明流程代码一致；只有实际 CI、Release 和隔离安装才能证明
-发布成功。
+Release 正文策略见 [Release 说明策略](changelog/README.md)。静态检查和 workflow 配置只能
+证明流程代码一致；只有实际 CI、Release 和隔离安装才能证明发布成功。
