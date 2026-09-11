@@ -34,3 +34,17 @@
 ## 交付
 
 仅在本仓库本地提交，不修改消费项目。
+
+## 后续清理（同任务续办）
+
+移除后复查发现残留，按用户确认逐项处理：
+
+- 两份 README 删除子代理迁移说明，不再描述已移除的能力或 npm 包状态。
+- 删除无人执行的 `tests/test_validate_skills.py`，该测试已不在 CI 或文档的维护面内。
+- `docs/agents/build-and-test.md` 标题改为「构建与测试」，并删除已失效的 `tomllib` 版本说明
+  （其唯一使用者 `scripts/validate-agents.py` 已删除）。
+- 移除本地空目录 `.codex/`、`bin/`、`src/`；这些目录本就不进入 Git 树。
+
+验证：`python3.12 scripts/validate-skills.py`、`compileall`、5 套 Skill 单测与隔离消费者测试
+全部通过；103 个 Markdown 文件的相对链接与锚点无失效；现行文档不再出现子代理、安装器或
+npm 包引用，仅 `docs/design-docs/overview.md` 保留说明结构性变更理由的历史描述。

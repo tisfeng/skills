@@ -70,19 +70,6 @@ npx skills update --project
 npx skills update --global
 ```
 
-## 迁移
-
-本仓库不再发布 Codex 子代理，也不再维护 `@tisfeng/codex-agents` 包；该包已在 npm 上标记
-deprecated。此前安装过子代理的项目可以一次性清理：
-
-```bash
-rm -f .codex/agents/planner.toml .codex/agents/reviewer.toml .codex/agents/tester.toml
-rm -f .codex/agents-lock.json
-```
-
-全局安装使用 `~/.codex/agents/` 下的同名文件。若项目规则引用了这些子代理，请同时移除对应
-引用；Skills 本身不需要任何改动。
-
 ## 许可证
 
 [MIT](LICENSE)

@@ -66,17 +66,6 @@ Update global Skills:
 npx skills update --global
 ```
 
-## Migration
-
-This repository no longer publishes Codex custom agents and no longer maintains the `@tisfeng/codex-agents` package; that package is deprecated on npm. Projects that installed the custom agents can clean them up once:
-
-```bash
-rm -f .codex/agents/planner.toml .codex/agents/reviewer.toml .codex/agents/tester.toml
-rm -f .codex/agents-lock.json
-```
-
-Global installations use the same file names under `~/.codex/agents/`. If your project rules reference those custom agents, remove the references as well; the Skills themselves need no changes.
-
 ## License
 
 [MIT](LICENSE)
