@@ -21,13 +21,15 @@
 
 - planning 阶段的方案只出现在当前回复中，不创建或更新 active plan。
 - 用户明确批准 implementation 且 Mutation Gate 通过后，架构、协议、迁移、多步骤、跨模块或
-  高风险工作在 `docs/exec-plans/active/` 创建执行计划。
-- implementation 最终产生仓库文件差异时，必须在同一任务中创建或更新一条 `docs/histories/`
-  记录；没有差异时不创建空记录。
+  高风险工作从 [执行计划模板](../exec-plans/templates.md) 起草，保存为
+  `docs/exec-plans/active/YYYY-MM-DD-<slug>.md`；完成后移动到 `docs/exec-plans/completed/`。
+- implementation 最终产生仓库文件差异时，必须在同一任务中创建或更新一条 history，从
+  [history 模板](../histories/template.md) 起草并保存为
+  `docs/histories/YYYY-MM/YYYY-MM-DD-<slug>.md`；没有差异时不创建空记录。
+- 计划与 history 的 `<slug>` 使用小写 kebab-case，两者共享同一任务标识。
 - 同一任务分多轮实施时复用同一条 history。只修改 history 的任务由该记录描述自身，不递归创建
   第二条。
-- 存在执行计划时，完成后移动到 `docs/exec-plans/completed/`，并让同任务 history 链接
-  completed plan。
+- 存在执行计划时，让同任务 history 链接 completed plan。
 - 交付时将同任务 history 与其他任务变更一起验证和精确暂存。缺少 history 时在允许范围内补齐；
   用户明确排除该路径时不扩权，并按 Git 规则报告交付阻塞。
 - 显式提交已有 staged 内容不反向要求补写 implementation history。

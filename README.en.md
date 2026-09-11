@@ -30,6 +30,10 @@ This repository is part of the agent development workflow for [Easydict](https:/
 
 A project's own `AGENTS.md`, build and validation configuration, and explicit user instructions take precedence over this repository's defaults. Skills and custom agents perform remote operations such as pushing, merging, publishing, or commenting only with explicit user authorization and when the applicable workflow conditions are satisfied.
 
+Companion Skills are discovered from their actual load location, so a project does not need to copy this repository's agent documentation. `worktree-rebase-merge` confirms `git-commit` is available before its first Git write; `submit-pr` requires it only when a commit must be created, so an already committed clean branch can be planned or submitted on its own. When a companion capability is missing, the Skill reports the affected step instead of rewriting host rules.
+
+Pull request submission uses a Conventional task branch by default and can keep a project's branch name through the existing `--head-branch` option; the Python interpreter used by a helper can be selected independently of the product runtime.
+
 ## Installation
 
 Skills and Codex custom agents use different installers and maintain separate lock files.
@@ -69,6 +73,8 @@ npx @tisfeng/codex-agents add tisfeng/skills --agent '*' --global
 Skills are written to `~/.codex/skills/`; custom agents are written to `~/.codex/agents/`. Each installer maintains its global lock file in the user's directories, so these files do not need to be committed to a project repository.
 
 ## Updating
+
+Routine upgrades only update installed assets and dependency records; they do not require a project to rewrite `AGENTS.md` or copy a Skill's internal workflow. Projects keep their own authorization, build, validation, and delivery policies, while Skills handle their own execution, validation, and failure handling. Only an incompatible change to a public entrypoint, required input, or supported dependency needs the matching migration note.
 
 Update Skills and custom agents installed for the current project:
 
