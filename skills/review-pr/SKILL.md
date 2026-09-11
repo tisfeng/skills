@@ -8,12 +8,19 @@ description: >
 
 # PR Review 工作流
 
-先读取通用核心 [`review`](../review/SKILL.md)。本 skill 只补充 GitHub 上下文、准备、
+先读取通用核心 `review`。本 skill 只补充 GitHub 上下文、准备、
 问题背景、线程维护和 PR 报告；本地工作树、提交、文件或模块 review 直接使用核心，不要求 PR。
 
 下文的 `<review-pr-skill-dir>` 表示当前加载的 `review-pr/SKILL.md` 所在目录。
 运行随 skill 分发的脚本时，先解析该实际目录；不要假设 skill 安装在某个固定的
 Agent 或项目路径中。
+
+`review` 是完成语义审查的配套依赖：优先从当前环境的 Skill 清单定位，未提供位置时再检查
+[同级安装位置](../review/SKILL.md)，不要假设它必须与本 Skill 相邻。开始 Git 准备前确认可读取
+该依赖；缺失时报告所缺能力，仍可完成已获准的只读证据收集，但不能宣称完整审查已完成。
+运行 helper 前确认 Git、已认证的 `gh` 和兼容的 Python 可用；helper 不可用时使用下文明确
+定义的等价回退。项目已有的授权、验证命令和审查要求继续生效，无需新增宿主配置或补救规则。
+快照字段、参考文件和重试步骤由本 Skill 内部编排，宿主只需给出 PR、目标和有效限制。
 
 默认使用本地 checkout。只有用户明确要求 worktree、并行 review 或并发 review 时，
 才使用隔离 Git worktree。如果缺少 PR 引用或引用存在歧义，在改变 Git 状态前先询问。
@@ -91,8 +98,10 @@ worktree、latest-base 合并与冲突修复仍按下文对应条件单独判断
   ```
 
   只有 `schema_version: 1`、`mode: collect`、PR/thread/checks 身份与 head 一致且命令明确以
-  0 退出时才接受结果。checks 查询使用已冻结 head 作为前置锚点并在查询后复验，不能把其他提交
-  的绿色 CI 绑定到当前快照。helper 不可用时按下文 **手动快照回退**执行，不得降低证据范围。
+  0 退出时才接受结果。helper 在全部并行采集结束后独立读取并比较 PR 编号、URL、head、base
+  名称和 SHA；缺字段、读取失败或漂移均拒绝本轮证据，不返回成功快照或保存新证据文件。
+  checks 查询也使用冻结 head 并在查询后复验，不能把其他提交的绿色 CI 绑定到当前快照。
+  helper 不可用时按下文 **手动快照回退**执行，不得降低证据范围。
   helper 已检测到 head 或身份不一致时，本轮快照无效；重新采集，不能通过手动回退绕过检查。
   `pr.reviewContext` 保存问题来源，不代表已经理解需求或验证功能；缺失时按下文补齐，不能
   把旧 helper 没有该字段解释为没有关联 issue。`summary.context.coverage` 明示正文覆盖缺口。
@@ -120,8 +129,8 @@ worktree、latest-base 合并与冲突修复仍按下文对应条件单独判断
     --expected-checks-fingerprint <sha256>
   ```
 
-  `unchanged: true` 只省略重复传回模型的全量内容，不代表跳过远程刷新。默认完整返回变化的
-  section；head 变化时返回全部当前证据。base 参数成对提供，不能把 `base_comparison: not_provided`
+  `unchanged: true` 只省略重复传回模型的全量内容，不跳过远程刷新或末尾的完整身份复验。
+  默认完整返回变化的 section；head 变化时返回全部当前证据。base 参数成对提供，不能把 `base_comparison: not_provided`
   当作 base 未变；旧 helper 路径需手动比较 base 名称和 SHA，按下文重新确定审查范围。
 
 大 PR 或需要复用准备元数据时，读取 [快照传输协议](references/snapshot-protocol.md)，使用可选
@@ -132,9 +141,10 @@ worktree、latest-base 合并与冲突修复仍按下文对应条件单独判断
 ### 手动快照回退
 
 初始采集和最终刷新使用同一协议。将 PR 引用规范化为明确的 `<number> --repo <base-owner>/<base-repo>`，
-本轮所有查询固定使用该身份；只有完成最后的 head 复验，才能接受本轮证据。
+本轮所有查询固定使用该身份；只有完成最后的完整身份复验，才能接受本轮证据。
 
-1. 读取完整 PR 元数据，记录 `number`、`url` 和 `headRefOid`，将后者冻结为 `head_before`：
+1. 读取完整 PR 元数据，冻结 `number`、`url`、`headRefOid`、`baseRefName` 和 `baseRefOid`；
+   编号必须匹配请求，URL 必须对应请求仓库和 PR，其余字段必须是非空字符串：
 
    ```bash
    gh pr view <number> --repo <base-owner>/<base-repo> \
@@ -157,9 +167,16 @@ worktree、latest-base 合并与冲突修复仍按下文对应条件单独判断
    `gh pr checks` 的 0、1、8 退出码只有在返回有效 checks JSON 数组时才可作为观测状态接受。
    失败或 pending checks 不是读取失败，也不是等待指令；空数组不能作为绿色 CI 证据。
 
-3. 全部读取结束后，再单独查询 `gh pr view <number> --repo <base-owner>/<base-repo> --json headRefOid`，
-   记录非空 `head_after`。只有 PR 与 threads 的编号、URL 一致并匹配请求的仓库与 PR，且
-   `head_before == threads.headRefOid == head_after` 时才接受完整快照；checks 随该 head 保存。
+3. 全部读取结束后，再单独查询：
+
+   ```bash
+   gh pr view <number> --repo <base-owner>/<base-repo> \
+     --json number,url,headRefOid,baseRefName,baseRefOid
+   ```
+
+   验证字段完整，并逐项与步骤 1 的五个字段比较。只有全部相等，且 threads 的编号、URL 和
+   head 与初始 PR 一致时才接受完整快照；checks 随该 head 保存。只检查 head 不能证明 base
+   没有变化，checks 或 thread 分页内部的检查也不能替代所有采集完成后的这次复验。
    最终刷新还须与此前已审查的 head 和完整上下文比较，不能仅凭本轮内部一致宣称审查已覆盖新 head。
 
 查询失败、缺少必要字段或无法证明一致性时，不复用本轮 checks，也不据此跳过本地验证。
@@ -167,6 +184,8 @@ worktree、latest-base 合并与冲突修复仍按下文对应条件单独判断
 和未覆盖状态，结束本轮尝试，不无限重试。新 head 的准备和审查遵循 **最终输出前刷新实时 PR 状态**。
 helper 检测到漂移时同样适用这一停止条件。支持程序化编排时，上述依赖步骤可在一次调用中完成，
 不增加模型往返；正常 helper 路径无需额外查询。
+该复验证明本轮观测到的身份一致，不构成远程原子快照，也不保证之后没有新活动；需求、评论和
+checks 的内容仍按最终刷新协议比较，报告保留实际已检查的快照边界。
 
 ## 工作流
 
@@ -375,7 +394,7 @@ gh pr checks <number> [--repo <base-owner>/<base-repo>] --json bucket,link,name,
 
 编写最终回复前立即按 **快速审查协议**运行 `review_snapshot.py refresh`。它会再次完整读取所有
 可变 review 状态；fingerprint 未变化时只返回紧凑结果。helper 不可用或初始手动快照没有
-fingerprint 时，按 **手动快照回退**重新完整采集；通过最后的 head 复验后，才与初始快照比较，
+fingerprint 时，按 **手动快照回退**重新完整采集；通过最后的完整身份复验后，才与初始快照比较，
 包括 PR 上下文、checks、开放 thread 清单、评论回复、`isResolved` 和 `isOutdated` 状态。
 
 - 如果 `headRefOid` 发生变化，停止最终输出，将准备好的 checkout 更新到新 head，

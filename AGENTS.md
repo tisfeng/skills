@@ -44,4 +44,5 @@
 - `skills/` 与 `.codex/agents/` 是本仓库维护、随 tag 发布的源码；不要改写为下游项目的
   `.agents/skills/` 路径。源码变更不因此授权 npm 发布、GitHub release、push 或修改用户全局
   Codex 配置。
-- 文档使用相对仓库路径；行为变化时同步更新实现、测试和受影响文档。
+- 文档使用相对仓库路径；行为变化时同步更新实现、测试和受影响文档，范围按
+  `docs/agents/README.md` 的 Skill 与宿主职责判断。

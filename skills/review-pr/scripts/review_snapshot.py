@@ -13,6 +13,7 @@ import subprocess
 import sys
 import time
 from typing import Any, Callable
+from urllib.parse import urlsplit
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -32,6 +33,7 @@ PR_FIELDS = (
 )
 CHECK_FIELDS = "bucket,link,name,state,workflow"
 CHECK_EXIT_CODES = (0, 1, 8)
+IDENTITY_FIELDS = ("number", "url", "headRefOid", "baseRefName", "baseRefOid")
 
 
 class SnapshotError(RuntimeError):
@@ -131,6 +133,34 @@ def collect_pr_head(repo: str, number: int) -> str:
     return payload["headRefOid"]
 
 
+def snapshot_identity(payload: Any, repo: str, number: int) -> dict[str, Any]:
+    """Require a complete identity tied to the requested base repository and PR."""
+
+    if not isinstance(payload, dict):
+        raise SnapshotError("PR identity must be an object; collect again")
+    if type(payload.get("number")) is not int or payload["number"] != number:
+        raise SnapshotError("PR number does not match the request; collect again")
+    for field in IDENTITY_FIELDS[1:]:
+        if not isinstance(payload.get(field), str) or not payload[field].strip():
+            raise SnapshotError(f"PR identity is missing {field}; collect again")
+    url = urlsplit(payload["url"])
+    expected_path = f"/{repo}/pull/{number}"
+    if (url.scheme not in ("https", "http") or not url.netloc
+            or url.path.casefold() != expected_path.casefold() or url.query or url.fragment):
+        raise SnapshotError("PR URL does not match the requested repository and number; collect again")
+    return {field: payload[field] for field in IDENTITY_FIELDS}
+
+
+def collect_pr_identity(repo: str, number: int) -> dict[str, Any]:
+    """Re-read the complete identity after every parallel collector has finished."""
+
+    payload, _ = run_json([
+        "gh", "pr", "view", str(number), "--repo", repo,
+        "--json", ",".join(IDENTITY_FIELDS),
+    ])
+    return snapshot_identity(payload, repo, number)
+
+
 def collect_checks(repo: str, number: int, expected_head: str) -> dict[str, Any]:
     """Collect check state and prove that the anchored PR head stayed stable."""
 
@@ -204,9 +234,8 @@ def collect_snapshot(repo: str, number: int, *, issue_refs=(), discussion_refs=(
 
     started = time.monotonic()
     pr, pr_ms = measured(lambda: collect_pr(repo, number))
-    expected_head = pr.get("headRefOid")
-    if not isinstance(expected_head, str) or not expected_head:
-        raise SnapshotError("gh pr view did not return headRefOid")
+    identity_before = snapshot_identity(pr, repo, number)
+    expected_head = identity_before["headRefOid"]
     with ThreadPoolExecutor(max_workers=3) as executor:
         futures = {
             "context": executor.submit(
@@ -233,6 +262,15 @@ def collect_snapshot(repo: str, number: int, *, issue_refs=(), discussion_refs=(
     if pr.get("url") != threads.get("url"):
         raise SnapshotError("PR identity changed during snapshot collection; collect again")
 
+    # A checks or thread guard can finish while another collector is still
+    # reading. Close that gap before fingerprinting, returning or saving evidence.
+    identity_after, identity_ms = measured(lambda: collect_pr_identity(repo, number))
+    changed = [field for field in IDENTITY_FIELDS if identity_before[field] != identity_after[field]]
+    if changed:
+        raise SnapshotError(
+            "PR identity changed after parallel collection (" + ", ".join(changed) + "); collect again"
+        )
+
     pr = dict(pr, reviewContext=context)
     fingerprints = section_fingerprints(pr, threads, checks)
     return {
@@ -257,6 +295,7 @@ def collect_snapshot(repo: str, number: int, *, issue_refs=(), discussion_refs=(
             "pr": pr_ms,
             "threads": threads_ms,
             "checks": checks_ms,
+            "identity": identity_ms,
             "wall": round((time.monotonic() - started) * 1000, 3),
         },
         "pr": pr,

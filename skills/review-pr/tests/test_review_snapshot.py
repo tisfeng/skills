@@ -9,6 +9,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -98,6 +99,17 @@ def check_payload(*, exit_code: int = 0, head: str = "head-1") -> dict[str, obje
     }
 
 
+def pr_identity(*, number: int = 42, url: str = "https://github.com/owner/repo/pull/42",
+                head: str = "head-1", base_name: str = "main", base: str = "base-1") -> dict[str, object]:
+    return {
+        "number": number,
+        "url": url,
+        "headRefOid": head,
+        "baseRefName": base_name,
+        "baseRefOid": base,
+    }
+
+
 class ReviewSnapshotTests(unittest.TestCase):
     def collect(self) -> dict[str, object]:
         with (
@@ -111,6 +123,11 @@ class ReviewSnapshotTests(unittest.TestCase):
                 review_snapshot,
                 "collect_checks",
                 return_value=check_payload(),
+            ),
+            patch.object(
+                review_snapshot,
+                "collect_pr_identity",
+                return_value=pr_identity(),
             ),
         ):
             return review_snapshot.collect_snapshot("owner/repo", 42)
@@ -182,11 +199,114 @@ class ReviewSnapshotTests(unittest.TestCase):
                 "collect_checks",
                 return_value=check_payload(head="head-2"),
             ),
+            patch.object(
+                review_snapshot,
+                "collect_pr_identity",
+                return_value=pr_identity(),
+            ),
         ):
             with self.assertRaisesRegex(
                 review_snapshot.SnapshotError, "checks do not match"
             ):
                 review_snapshot.collect_snapshot("owner/repo", 42)
+
+    def test_collect_rechecks_full_identity_after_all_parallel_collectors_finish(self) -> None:
+        """The closing identity read must happen after, rather than alongside, collectors."""
+
+        checks_finished = threading.Event()
+        context_finished = threading.Event()
+        threads_finished = threading.Event()
+        final_read = threading.Event()
+
+        def collect_checks(*_arguments: object) -> dict[str, object]:
+            checks_finished.set()
+            return check_payload()
+
+        def collect_context(*_arguments: object) -> dict[str, object]:
+            self.assertTrue(checks_finished.wait(timeout=5), "checks did not finish")
+            context_finished.set()
+            return {"issues": [], "requested_issues": [], "discussion_issues": []}
+
+        def collect_threads(*_arguments: object) -> dict[str, object]:
+            self.assertTrue(checks_finished.wait(timeout=5), "checks did not finish")
+            threads_finished.set()
+            return thread_payload()
+
+        def collect_identity(*_arguments: object) -> dict[str, object]:
+            self.assertTrue(checks_finished.is_set())
+            self.assertTrue(context_finished.is_set())
+            self.assertTrue(threads_finished.is_set())
+            final_read.set()
+            return pr_identity()
+
+        with (
+            patch.object(review_snapshot, "collect_pr", return_value=pr_payload()),
+            patch.object(review_snapshot.review_context, "collect", side_effect=collect_context),
+            patch.object(review_snapshot.review_threads, "collect", side_effect=collect_threads),
+            patch.object(review_snapshot, "collect_checks", side_effect=collect_checks),
+            patch.object(review_snapshot, "collect_pr_identity", side_effect=collect_identity),
+        ):
+            snapshot = review_snapshot.collect_snapshot("owner/repo", 42)
+
+        self.assertTrue(final_read.is_set())
+        self.assertEqual(snapshot["headRefOid"], "head-1")
+
+    def test_collect_rejects_final_identity_drift_or_missing_evidence(self) -> None:
+        for name, final_identity, message in (
+            ("number", pr_identity(number=43), "identity changed"),
+            ("url", pr_identity(url="https://github.com/owner/repo/pull/43"), "identity changed"),
+            ("head", pr_identity(head="head-2"), "identity changed"),
+            ("base name", pr_identity(base_name="release/1.0"), "identity changed"),
+            ("base SHA", pr_identity(base="base-2"), "identity changed"),
+        ):
+            with self.subTest(field=name):
+                with (
+                    patch.object(review_snapshot, "collect_pr", return_value=pr_payload()),
+                    patch.object(review_snapshot.review_context, "collect", return_value={"issues": []}),
+                    patch.object(review_snapshot.review_threads, "collect", return_value=thread_payload()),
+                    patch.object(review_snapshot, "collect_checks", return_value=check_payload()),
+                    patch.object(review_snapshot, "collect_pr_identity", return_value=final_identity),
+                ):
+                    with self.assertRaisesRegex(review_snapshot.SnapshotError, message):
+                        review_snapshot.collect_snapshot("owner/repo", 42)
+
+    def test_collect_pr_identity_rejects_each_missing_final_field(self) -> None:
+        for field in review_snapshot.IDENTITY_FIELDS:
+            with self.subTest(field=field):
+                incomplete = pr_identity()
+                del incomplete[field]
+                with patch.object(review_snapshot, "run_json", return_value=(incomplete, 0)):
+                    message = "number does not match" if field == "number" else f"missing {field}"
+                    with self.assertRaisesRegex(review_snapshot.SnapshotError, message):
+                        review_snapshot.collect_pr_identity("owner/repo", 42)
+
+    def test_final_identity_read_failure_emits_no_stdout_or_snapshot_file(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            output_path = Path(directory) / "must-not-exist.json"
+            output = io.StringIO()
+            error = io.StringIO()
+            arguments = [
+                "review_snapshot.py", "collect", "--repo", "owner/repo", "--pr", "42",
+                "--snapshot-out", str(output_path),
+            ]
+            with (
+                patch.object(review_snapshot, "collect_pr", return_value=pr_payload()),
+                patch.object(review_snapshot.review_context, "collect", return_value={"issues": []}),
+                patch.object(review_snapshot.review_threads, "collect", return_value=thread_payload()),
+                patch.object(review_snapshot, "collect_checks", return_value=check_payload()),
+                patch.object(
+                    review_snapshot, "collect_pr_identity",
+                    side_effect=review_snapshot.SnapshotError("final identity read failed"),
+                ),
+                patch.object(sys, "argv", arguments),
+                contextlib.redirect_stdout(output),
+                contextlib.redirect_stderr(error),
+            ):
+                self.assertEqual(review_snapshot.main(), 1)
+
+            self.assertEqual(output.getvalue(), "")
+            self.assertIn("final identity read failed", error.getvalue())
+            self.assertFalse(output_path.exists())
 
     def test_unchanged_refresh_omits_repeated_full_sections(self) -> None:
         current = self.collect()
@@ -551,7 +671,9 @@ class ReviewSnapshotTests(unittest.TestCase):
             review_snapshot.review_threads, "collect", return_value=thread_payload()
         ), patch.object(review_snapshot, "collect_checks", return_value=check_payload(exit_code=8)), patch.object(
             review_snapshot.review_context, "graphql", return_value={"repository": {"issueOrPullRequest": issue}}
-        ) as graphql:
+        ) as graphql, patch.object(
+            review_snapshot, "collect_pr_identity", return_value=pr_identity()
+        ):
             result = review_snapshot.collect_snapshot("owner/repo", 42)
         self.assertEqual(graphql.call_count, 1)
         source = result["pr"]["reviewContext"]["issues"][0]

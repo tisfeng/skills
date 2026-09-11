@@ -28,6 +28,9 @@
 - 每次变更运行 `git diff --check`。
 - 修改 Skill、Skill 脚本或 Skill 测试时运行 `python3.12 scripts/validate-skills.py` 和直接相关的
   Python 单测。
+- 修改 Skill 依赖、资源引用或跨项目执行行为时，运行
+  `python3.12 -m unittest discover -s tests -p 'test_skill_portability.py'`，验证隔离消费者中的
+  安装资产与 helper 行为；它不能替代实际 Agent 对项目规则的理解和执行验证。
 - 修改 agent TOML、agent installer、Agent 治理或 agent 目录时运行
   `python3.12 scripts/validate-agents.py`；修改 installer 时运行
   `node --test tests/agents-installer.test.mjs`。
