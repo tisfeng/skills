@@ -20,15 +20,13 @@ This repository is part of the agent development workflow for [Easydict](https:/
 | [`submit-pr`](skills/submit-pr/SKILL.md) | Plan, push, and create or reuse GitHub pull requests | [`git-commit`](skills/git-commit/SKILL.md) when a commit is needed |
 | [`worktree-rebase-merge`](skills/worktree-rebase-merge/SKILL.md) | Commit worktree changes, rebase them, and safely merge into a target branch | [`git-commit`](skills/git-commit/SKILL.md) |
 
-A project's own `AGENTS.md`, build and validation configuration, and explicit user instructions take precedence over this repository's defaults. Skills perform remote operations such as pushing, merging, publishing, or commenting only with explicit user authorization and when the applicable workflow conditions are satisfied.
+A project's own `AGENTS.md`, build and validation configuration, and explicit user instructions take precedence over this repository's defaults; remote operations such as pushing, merging, publishing, or commenting run only with explicit user authorization.
 
-Companion Skills are discovered from their actual load location, so a project does not need to copy this repository's agent documentation. `worktree-rebase-merge` confirms `git-commit` is available before its first Git write; `submit-pr` requires it only when a commit must be created, so an already committed clean branch can be planned or submitted on its own. When a companion capability is missing, the Skill reports the affected step instead of rewriting host rules.
-
-Pull request submission uses a Conventional task branch by default and can keep a project's branch name through the existing `--head-branch` option; the Python interpreter used by a helper can be selected independently of the product runtime.
+Companion Skills are resolved from their actual load location and report the affected step when missing instead of rewriting host rules; `submit-pr` depends on `git-commit` only when a commit must be created. Pull request submission uses a Conventional task branch by default and can keep a project's branch name through `--head-branch`; the Python interpreter used by a helper can be selected independently of the product runtime.
 
 ## Installation
 
-Installing Skills requires Git. The commands below do not specify a tag, so they follow the repository's default branch; lock files record the source revision and content hashes actually installed.
+Installing Skills requires Git. The commands below do not specify a tag, so they follow the repository's default branch; lock files record the source revision and content hashes installed.
 
 ### Project installation (default)
 
@@ -38,7 +36,7 @@ Install every published Skill in the current project:
 npx skills add tisfeng/skills --skill '*' --agent codex --yes
 ```
 
-`--skill '*'` matches only the published Skills under `skills/`; this repository's release skill lives outside the discovery path and is never installed. Skills are written to `.agents/skills/` and recorded in `skills-lock.json`. Commit the lock file so the team uses the same source revisions and content.
+`--skill '*'` matches only the published Skills under `skills/`; this repository's release skill lives outside the discovery path. Skills are written to `.agents/skills/` and recorded in `skills-lock.json`; commit the lock file so the team uses the same source revisions and content.
 
 ### Global installation
 
@@ -48,11 +46,9 @@ Install every published Skill in Codex's global directory:
 npx skills add tisfeng/skills --skill '*' --agent codex --yes --global
 ```
 
-Skills are written to `~/.codex/skills/`. The installer maintains its global lock file in the user's directories, so it does not need to be committed to a project repository.
+Skills are written to `~/.codex/skills/`. The installer maintains its global lock file, so it does not need to be committed.
 
 ## Updating
-
-Routine upgrades only update installed assets and dependency records; they do not require a project to rewrite `AGENTS.md` or copy a Skill's internal workflow. Projects keep their own authorization, build, validation, and delivery policies, while Skills handle their own execution, validation, and failure handling. Only an incompatible change to a public entrypoint, required input, or supported dependency needs the matching migration note.
 
 Update Skills installed for the current project:
 
