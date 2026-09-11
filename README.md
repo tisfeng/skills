@@ -5,9 +5,9 @@
   <a href="./README.en.md">English</a>
 </p>
 
-面向通用软件项目的 Agent Skills 与 Codex 子代理配置集合，覆盖代码简化、Git 提交、代码审查、Pull Request 交付和 worktree 集成。Skills 通过 [`skills`](https://github.com/vercel-labs/skills) CLI 安装；Codex 子代理通过 `@tisfeng/codex-agents` 安装。
+面向通用软件项目的 Agent Skills 集合，覆盖代码简化、Git 提交、代码审查、Pull Request 交付和 worktree 集成。Skills 通过 [`skills`](https://github.com/vercel-labs/skills) CLI 安装。
 
-本仓库是 [Easydict](https://github.com/tisfeng/Easydict) Agent 开发流程的一部分；Easydict 使用这里发布的 Skills 和 Codex 子代理配置组织日常开发、代码审查与 Git 交付。
+本仓库是 [Easydict](https://github.com/tisfeng/Easydict) Agent 开发流程的一部分；Easydict 使用这里发布的 Skills 组织日常开发、代码审查与 Git 交付。
 
 ## 技能目录
 
@@ -20,15 +20,7 @@
 | [`submit-pr`](skills/submit-pr/SKILL.md) | 规划、推送并创建或复用 GitHub Pull Request | 需要提交时使用 [`git-commit`](skills/git-commit/SKILL.md) |
 | [`worktree-rebase-merge`](skills/worktree-rebase-merge/SKILL.md) | 提交 worktree 变更、执行 rebase，并安全合并到目标分支 | [`git-commit`](skills/git-commit/SKILL.md) |
 
-## 子代理目录
-
-| 子代理 | 用途 |
-| --- | --- |
-| [`planner`](.codex/agents/planner.toml) | 只读分析需求、证据与取舍，输出实施建议 |
-| [`reviewer`](.codex/agents/reviewer.toml) | 只读审查指定快照，提供有证据的缺陷与修复建议 |
-| [`tester`](.codex/agents/tester.toml) | 在授权范围内编写行为测试并执行针对性验证 |
-
-项目的 `AGENTS.md`、构建与验证配置以及用户明确指令优先于本仓库的默认规则。涉及 push、merge、发布、评论等远程操作时，Skills 与子代理只会在用户明确授权且相应工作流条件满足后执行。
+项目的 `AGENTS.md`、构建与验证配置以及用户明确指令优先于本仓库的默认规则。涉及 push、merge、发布、评论等远程操作时，Skills 只会在用户明确授权且相应工作流条件满足后执行。
 
 配套 Skill 按实际加载位置发现，不要求项目复制本仓库 Agent 文档。`worktree-rebase-merge`
 在首次 Git 写入前确认 `git-commit` 可用；`submit-pr` 仅在需要创建提交时要求它，干净的已有
@@ -38,9 +30,7 @@ PR 提交默认使用 Conventional 任务分支，也可通过现有 `--head-bra
 
 ## 安装
 
-Skills 与 Codex 子代理使用不同的安装器，并分别维护自己的 lock 文件。
-
-安装 Codex 子代理需要 Git 和 Node.js 20 或更高版本。以下命令未指定 tag，会跟随仓库默认分支；lock 文件记录实际安装的源码 revision 和内容哈希。
+安装 Skills 需要 Git。以下命令未指定 tag，会跟随仓库默认分支；lock 文件记录实际安装的源码 revision 和内容哈希。
 
 ### 项目安装（默认）
 
@@ -50,13 +40,7 @@ Skills 与 Codex 子代理使用不同的安装器，并分别维护自己的 lo
 npx skills add tisfeng/skills --skill '*' --agent codex --yes
 ```
 
-在当前项目安装全部子代理：
-
-```bash
-npx @tisfeng/codex-agents add tisfeng/skills --agent '*'
-```
-
-Skills 写入 `.agents/skills/`，并在 `skills-lock.json` 中记录版本；子代理写入 `.codex/agents/`，并在 `.codex/agents-lock.json` 中记录版本。请将两个 lock 文件提交到版本控制，确保团队使用相同的来源版本和内容。
+Skills 写入 `.agents/skills/`，并在 `skills-lock.json` 中记录版本。请将 lock 文件提交到版本控制，确保团队使用相同的来源版本和内容。
 
 ### 全局安装
 
@@ -66,13 +50,7 @@ Skills 写入 `.agents/skills/`，并在 `skills-lock.json` 中记录版本；�
 npx skills add tisfeng/skills --skill '*' --agent codex --yes --global
 ```
 
-在 Codex 全局目录安装全部子代理：
-
-```bash
-npx @tisfeng/codex-agents add tisfeng/skills --agent '*' --global
-```
-
-Skills 写入 `~/.codex/skills/`；子代理写入 `~/.codex/agents/`。全局 lock 文件由各安装器在用户目录中维护，无需提交到项目仓库。
+Skills 写入 `~/.codex/skills/`；全局 lock 文件由安装器在用户目录中维护，无需提交到项目仓库。
 
 ## 更新
 
@@ -80,19 +58,30 @@ Skills 写入 `~/.codex/skills/`；子代理写入 `~/.codex/agents/`。全局 l
 项目继续维护自己的授权、构建、验证和交付政策；Skill 负责自身执行、校验和失败处理。
 公开入口、必填输入或支持依赖发生不兼容变化时，才需要按对应迁移说明处理。
 
-更新当前项目安装的 Skills 和子代理：
+更新当前项目安装的 Skills：
 
 ```bash
 npx skills update --project
-npx @tisfeng/codex-agents update
 ```
 
-更新全局 Skills 和子代理：
+更新全局 Skills：
 
 ```bash
 npx skills update --global
-npx @tisfeng/codex-agents update --global
 ```
+
+## 迁移
+
+本仓库不再发布 Codex 子代理，也不再维护 `@tisfeng/codex-agents` 包；该包已在 npm 上标记
+deprecated。此前安装过子代理的项目可以一次性清理：
+
+```bash
+rm -f .codex/agents/planner.toml .codex/agents/reviewer.toml .codex/agents/tester.toml
+rm -f .codex/agents-lock.json
+```
+
+全局安装使用 `~/.codex/agents/` 下的同名文件。若项目规则引用了这些子代理，请同时移除对应
+引用；Skills 本身不需要任何改动。
 
 ## 许可证
 

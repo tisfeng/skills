@@ -3,6 +3,7 @@ name: Validate Skills
 on:
   push:
   pull_request:
+  workflow_call:
 
 permissions:
   contents: read
@@ -19,22 +20,11 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
       - name: Validate skill structure
         run: python3 scripts/validate-skills.py
 
       - name: Compile Python files
         run: python3 -m compileall -q skills scripts
-
-      - name: Validate Codex agents
-        run: python3 scripts/validate-agents.py
-
-      - name: Test agent installer
-        run: node --test tests/agents-installer.test.mjs
 
       - name: Test git-commit
         run: python3 -m unittest discover -s skills/git-commit/tests -p 'test_*.py'
