@@ -84,16 +84,6 @@ npx skills update --global
 npx @tisfeng/codex-agents update --global
 ```
 
-The `git-delivery` source has been removed; the current model handles Git delivery directly through
-its Skills. The installer does not remove old agents automatically. Before updating, delete
-`agents/git-delivery.toml` from the relevant installation directory and remove `git-delivery` from
-the `agents` object in `agents-lock.json`. To defer cleanup, update only the remaining agents with
-`npx @tisfeng/codex-agents update --agent planner --agent reviewer --agent tester` (add `--global`
-for a global installation). Select only installed agents; an update without selectors fails if its
-source has removed the agent while its old lock entry remains.
-
-If a custom-agent TOML was modified locally, the installer refuses to overwrite a file whose hash differs from the lock file. After confirming the replacement, append `--force` to the relevant `add` or `update` command.
-
 ## License
 
 [MIT](LICENSE)

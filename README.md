@@ -94,14 +94,6 @@ npx skills update --global
 npx @tisfeng/codex-agents update --global
 ```
 
-旧版本安装的 `git-delivery` 已从源码移除，Git 交付由当前模型直接使用对应 Skill 完成。安装器
-不会自动删除旧角色；更新前请在相应安装目录删除 `agents/git-delivery.toml`，并从
-`agents-lock.json` 的 `agents` 对象移除 `git-delivery` 条目。暂不清理时，可仅更新仍提供的角色：
-`npx @tisfeng/codex-agents update --agent planner --agent reviewer --agent tester`（全局安装追加
-`--global`）。只选择已安装的角色；保留旧条目且更新源已移除该角色时，无参数更新会失败。
-
-若本地修改过子代理 TOML，安装器会拒绝覆盖与 lock 文件哈希不一致的文件。确认需要替换后，在对应的 `add` 或 `update` 命令末尾加入 `--force`。
-
 ## 许可证
 
 [MIT](LICENSE)
