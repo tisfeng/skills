@@ -35,21 +35,17 @@ Installing Skills requires Git. The commands below do not specify a tag, so they
 Install every published Skill in the current project:
 
 ```bash
-npx skills add tisfeng/skills --agent codex --yes \
-  --skill code-simplifier --skill git-commit --skill review \
-  --skill review-pr --skill submit-pr --skill worktree-rebase-merge
+npx skills add tisfeng/skills --skill '*' --agent codex --yes
 ```
 
-The example lists the published Skills explicitly; this repository's release skill lives outside the discovery path and is never installed. Skills are written to `.agents/skills/` and recorded in `skills-lock.json`. Commit the lock file so the team uses the same source revisions and content.
+`--skill '*'` matches only the published Skills under `skills/`; this repository's release skill lives outside the discovery path and is never installed. Skills are written to `.agents/skills/` and recorded in `skills-lock.json`. Commit the lock file so the team uses the same source revisions and content.
 
 ### Global installation
 
 Install every published Skill in Codex's global directory:
 
 ```bash
-npx skills add tisfeng/skills --agent codex --yes --global \
-  --skill code-simplifier --skill git-commit --skill review \
-  --skill review-pr --skill submit-pr --skill worktree-rebase-merge
+npx skills add tisfeng/skills --skill '*' --agent codex --yes --global
 ```
 
 Skills are written to `~/.codex/skills/`. The installer maintains its global lock file in the user's directories, so it does not need to be committed to a project repository.
