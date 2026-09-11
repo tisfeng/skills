@@ -14,8 +14,14 @@ import unittest
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-REVIEW_PR_SOURCE = REPOSITORY_ROOT / "skills" / "review-pr"
-REVIEW_SOURCE = REPOSITORY_ROOT / "skills" / "review"
+PUBLIC_SKILL_NAMES = (
+    "code-simplifier",
+    "git-commit",
+    "review",
+    "review-pr",
+    "submit-pr",
+    "worktree-rebase-merge",
+)
 
 
 FAKE_GH = r'''#!__PYTHON__
@@ -45,6 +51,11 @@ if arguments[:2] == ["pr", "view"]:
     print(json.dumps(payload))
 elif arguments[:2] == ["pr", "checks"]:
     print("[]")
+elif arguments[:2] == ["repo", "view"]:
+    print(json.dumps({
+        "nameWithOwner": "acme/project", "defaultBranchRef": {"name": "main"},
+        "isFork": False, "parent": None,
+    }))
 elif arguments[:2] == ["api", "graphql"]:
     query = next(value for value in arguments if value.startswith("query="))
     pr = {"id": "PR_1", "url": url, "headRefOid": "head-1", "state": "OPEN"}
@@ -66,18 +77,34 @@ class SkillPortabilityTests(unittest.TestCase):
         self.consumer.mkdir()
         self.skills = self.consumer / "installed-skills"
         ignored = shutil.ignore_patterns("__pycache__")
-        shutil.copytree(REVIEW_PR_SOURCE, self.skills / "review-pr", ignore=ignored)
-        shutil.copytree(REVIEW_SOURCE, self.skills / "review", ignore=ignored)
+        for name in PUBLIC_SKILL_NAMES:
+            shutil.copytree(REPOSITORY_ROOT / "skills" / name, self.skills / name, ignore=ignored)
+        self.standalone_submit = self.root / "standalone-submit-pr" / "submit-pr"
+        shutil.copytree(REPOSITORY_ROOT / "skills" / "submit-pr", self.standalone_submit, ignore=ignored)
+        self.assertFalse((self.standalone_submit.parent / "git-commit").exists())
         fake_bin = self.root / "fake-bin"
         fake_bin.mkdir()
         fake_gh = fake_bin / "gh"
         fake_gh.write_text(FAKE_GH.replace("__PYTHON__", sys.executable), encoding="utf-8")
         fake_gh.chmod(0o755)
-        self.environment = dict(os.environ, PATH=f"{fake_bin}{os.pathsep}{os.environ['PATH']}")
+        self.environment = dict(
+            os.environ,
+            PATH=f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
+            GIT_CONFIG_GLOBAL=os.devnull,
+            GIT_CONFIG_NOSYSTEM="1",
+            GIT_TERMINAL_PROMPT="0",
+            GIT_ASKPASS=os.devnull,
+            GIT_ALLOW_PROTOCOL="file",
+        )
 
-    def execute(self, *arguments: str, environment: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    def execute(
+        self,
+        *arguments: str,
+        environment: dict[str, str] | None = None,
+        cwd: Path | None = None,
+    ) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            [sys.executable, *arguments], cwd=self.consumer,
+            [sys.executable, *arguments], cwd=cwd or self.consumer,
             env=environment or self.environment, text=True, capture_output=True, check=False,
         )
 
@@ -96,6 +123,33 @@ class SkillPortabilityTests(unittest.TestCase):
                 target = (markdown.parent / relative).resolve()
                 self.assertTrue(target.is_relative_to(closure), f"{markdown}: {reference} escapes copied skills")
                 self.assertTrue(target.exists(), f"{markdown}: missing copied target {reference}")
+
+    def git(self, project: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
+        result = subprocess.run(
+            ["git", *arguments], cwd=project, env=self.environment,
+            text=True, capture_output=True, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return result
+
+    def make_git_project(self) -> Path:
+        project = self.consumer / "project"
+        project.mkdir()
+        self.git(project, "init", "-b", "main")
+        self.git(project, "config", "user.name", "Portable Skill Test")
+        self.git(project, "config", "user.email", "portable@example.invalid")
+        (project / "README.md").write_text("# Portable\n", encoding="utf-8")
+        (project / "app.py").write_text("print('base')\n", encoding="utf-8")
+        self.git(project, "add", "README.md", "app.py")
+        self.git(project, "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false", "commit", "-m", "chore: seed project")
+        base = self.git(project, "rev-parse", "HEAD").stdout.strip()
+        self.git(project, "remote", "add", "origin", "https://github.com/acme/project.git")
+        self.git(project, "update-ref", "refs/remotes/origin/main", base)
+        self.git(project, "checkout", "-b", "feat/portable-helper")
+        (project / "app.py").write_text("print('portable')\n", encoding="utf-8")
+        self.git(project, "add", "app.py")
+        self.git(project, "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false", "commit", "-m", "feat(cli): run copied helpers")
+        return project
 
     def test_copied_review_skills_collect_refresh_and_reject_drift_without_host_rules(self) -> None:
         """The installed pair operates without source docs or a consumer AGENTS.md."""
@@ -166,6 +220,87 @@ class SkillPortabilityTests(unittest.TestCase):
         self.assertEqual(under_rules.returncode, 0, under_rules.stderr)
         self.assertEqual(agents.read_text(encoding="utf-8"), agents_text)
         self.assertFalse((self.consumer / "docs").exists())
+
+    def test_all_copied_skills_run_git_helpers_without_host_rules_or_git_mutation(self) -> None:
+        """Copied Git helpers use only their installation and a supplied local repository."""
+
+        self.assertFalse((self.consumer / "AGENTS.md").exists())
+        self.assert_markdown_links_stay_in_copied_skill_closure()
+        project = self.make_git_project()
+        refs_before = self.git(project, "show-ref").stdout
+        index_before = (project / ".git" / "index").read_bytes()
+        status_before = self.git(project, "status", "--porcelain=v1").stdout
+        message = self.consumer / "message.txt"
+        message.write_text(
+            "feat(cli): validate copied helper\n\n"
+            "Explain the portable test context.\n\n"
+            "Run the copied helper scripts.\n\n"
+            "Keep the consumer repository unchanged.\n",
+            encoding="utf-8",
+        )
+
+        validator = self.execute(
+            str(self.skills / "git-commit" / "scripts" / "validate-commit-message.py"),
+            "--file", str(message), "--mode", "english",
+            environment=self.environment,
+        )
+        self.assertEqual(validator.returncode, 0, validator.stderr)
+        self.assertNotIn(str(REPOSITORY_ROOT), str(validator.args))
+        stats = self.execute(
+            str(self.skills / "git-commit" / "scripts" / "commit-change-stats.py"), "HEAD",
+            environment=self.environment, cwd=project,
+        )
+        self.assertEqual(stats.returncode, 0, stats.stderr)
+        self.assertEqual(json.loads(stats.stdout)["scope"], "commit")
+        facts = self.execute(
+            str(self.skills / "worktree-rebase-merge" / "scripts" / "collect-integration-facts.py"),
+            "--source", str(project), "--target", "main",
+            environment=self.environment, cwd=project,
+        )
+        self.assertEqual(facts.returncode, 0, facts.stderr)
+        facts_payload = json.loads(facts.stdout)
+        self.assertTrue(facts_payload["stable"])
+        self.assertEqual(facts_payload["target"]["name"], "main")
+        self.assertEqual(self.git(project, "show-ref").stdout, refs_before)
+        self.assertEqual((project / ".git" / "index").read_bytes(), index_before)
+        self.assertEqual(self.git(project, "status", "--porcelain=v1").stdout, status_before)
+        submit_plan = self.execute(
+            str(self.standalone_submit / "scripts" / "submit_pr.py"), "plan",
+            "--repo-root", str(project),
+            "--title", "feat(cli): run copied helpers",
+            "--summary", "Exercise copied helper assets.",
+            "--verification", "- Portable helper subprocesses passed.",
+            environment=self.environment, cwd=project,
+        )
+        self.assertEqual(submit_plan.returncode, 0, submit_plan.stderr)
+        self.assertEqual(json.loads(submit_plan.stdout)["mode"], "plan")
+        self.assertNotIn(str(REPOSITORY_ROOT), str(submit_plan.args))
+        self.assertFalse((project / "AGENTS.md").exists())
+        self.assertEqual(self.git(project, "show-ref").stdout, refs_before)
+        self.assertEqual((project / ".git" / "index").read_bytes(), index_before)
+        self.assertEqual(self.git(project, "status", "--porcelain=v1").stdout, status_before)
+
+        agents = project / "AGENTS.md"
+        agents_text = "Do not commit, update refs, or edit project rules.\n"
+        agents.write_text(agents_text, encoding="utf-8")
+        refs_under_rules = self.git(project, "show-ref").stdout
+        index_under_rules = (project / ".git" / "index").read_bytes()
+        status_under_rules = self.git(project, "status", "--porcelain=v1").stdout
+        under_rules = self.execute(
+            str(self.skills / "submit-pr" / "scripts" / "submit_pr.py"), "plan",
+            "--repo-root", str(project),
+            "--title", "feat(cli): run copied helpers",
+            "--summary", "Exercise copied helper assets.",
+            "--verification", "- Portable helper subprocesses passed.",
+            environment=self.environment, cwd=project,
+        )
+        self.assertEqual(under_rules.returncode, 0, under_rules.stderr)
+        self.assertEqual(agents.read_text(encoding="utf-8"), agents_text)
+        self.assertEqual(self.git(project, "show-ref").stdout, refs_under_rules)
+        self.assertEqual((project / ".git" / "index").read_bytes(), index_under_rules)
+        self.assertEqual(self.git(project, "status", "--porcelain=v1").stdout, status_under_rules)
+        self.assertFalse((self.consumer / "docs").exists())
+        self.assertFalse((project / "docs").exists())
 
     def test_copied_local_review_helper_preserves_consumer_rules_index_and_refs(self) -> None:
         """The local helper can inspect a consumer Git repository without mutating it."""
