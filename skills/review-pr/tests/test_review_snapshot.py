@@ -135,7 +135,7 @@ class ReviewSnapshotTests(unittest.TestCase):
     @staticmethod
     def with_fingerprints(snapshot: dict[str, object]) -> dict[str, object]:
         snapshot["fingerprints"] = review_snapshot.section_fingerprints(
-            snapshot["pr"], snapshot["threads"], snapshot["checks"]
+            snapshot["pr"], snapshot["context"], snapshot["threads"], snapshot["checks"]
         )
         return snapshot
 
@@ -146,6 +146,7 @@ class ReviewSnapshotTests(unittest.TestCase):
             42,
             expected_head=initial["headRefOid"],
             expected_pr_fingerprint=initial["fingerprints"]["pr"],
+            expected_context_fingerprint=initial["fingerprints"]["context"],
             expected_threads_fingerprint=initial["fingerprints"]["threads"],
             expected_checks_fingerprint=initial["fingerprints"]["checks"],
             current_snapshot=current,
@@ -159,6 +160,10 @@ class ReviewSnapshotTests(unittest.TestCase):
         self.assertEqual(first["schema_version"], 1)
         self.assertEqual(first["mode"], "collect")
         self.assertEqual(first["headRefOid"], "head-1")
+        self.assertEqual(set(first["fingerprints"]), set(review_snapshot.SECTIONS))
+        self.assertEqual(set(first["fingerprints"]), {"pr", "context", "threads", "checks"})
+        self.assertNotIn("reviewContext", first["pr"])
+        self.assertEqual(first["context"], second["context"])
         self.assertEqual(first["summary"]["threads"]["open"], 1)
         self.assertEqual(first["summary"]["checks"]["buckets"], {"pass": 1})
         self.assertEqual(first["fingerprints"], second["fingerprints"])
@@ -419,13 +424,14 @@ class ReviewSnapshotTests(unittest.TestCase):
                 42,
                 expected_head=current["headRefOid"],
                 expected_pr_fingerprint=current["fingerprints"]["pr"],
+                expected_context_fingerprint=current["fingerprints"]["context"],
                 expected_threads_fingerprint=current["fingerprints"]["threads"],
                 expected_checks_fingerprint=current["fingerprints"]["checks"],
             )
 
         self.assertTrue(refreshed["unchanged"])
         self.assertEqual(refreshed["changed_fields"], [])
-        for section in ("pr", "threads", "checks"):
+        for section in review_snapshot.SECTIONS:
             self.assertNotIn(section, refreshed)
 
     def test_refresh_expands_only_changed_section_when_head_is_stable(self) -> None:
@@ -447,6 +453,7 @@ class ReviewSnapshotTests(unittest.TestCase):
                 42,
                 expected_head=initial["headRefOid"],
                 expected_pr_fingerprint=initial["fingerprints"]["pr"],
+                expected_context_fingerprint=initial["fingerprints"]["context"],
                 expected_threads_fingerprint=initial["fingerprints"]["threads"],
                 expected_checks_fingerprint=initial["fingerprints"]["checks"],
             )
@@ -455,6 +462,7 @@ class ReviewSnapshotTests(unittest.TestCase):
         self.assertEqual(refreshed["changed_fields"], ["checks"])
         self.assertIn("checks", refreshed)
         self.assertNotIn("pr", refreshed)
+        self.assertNotIn("context", refreshed)
         self.assertNotIn("threads", refreshed)
 
     def test_head_change_expands_all_current_evidence(self) -> None:
@@ -472,12 +480,13 @@ class ReviewSnapshotTests(unittest.TestCase):
                 42,
                 expected_head=initial["headRefOid"],
                 expected_pr_fingerprint=initial["fingerprints"]["pr"],
+                expected_context_fingerprint=initial["fingerprints"]["context"],
                 expected_threads_fingerprint=initial["fingerprints"]["threads"],
                 expected_checks_fingerprint=initial["fingerprints"]["checks"],
             )
 
         self.assertIn("head", refreshed["changed_fields"])
-        for section in ("pr", "threads", "checks"):
+        for section in review_snapshot.SECTIONS:
             self.assertIn(section, refreshed)
 
     def test_base_only_refresh_requires_complete_expected_pair_and_marks_base(self) -> None:
@@ -599,7 +608,7 @@ class ReviewSnapshotTests(unittest.TestCase):
         refreshed = self.refresh(initial, copy.deepcopy(initial), previous_snapshot=tampered)
 
         self.assertIn("evidence_reset", refreshed)
-        for section in ("pr", "threads", "checks"):
+        for section in review_snapshot.SECTIONS:
             self.assertIn(section, refreshed)
 
     def test_refresh_cli_recollects_full_evidence_when_previous_file_is_corrupt(self) -> None:
@@ -612,6 +621,7 @@ class ReviewSnapshotTests(unittest.TestCase):
                 "review_snapshot.py", "refresh", "--repo", "owner/repo", "--pr", "42",
                 "--expected-head", "head-1",
                 "--expected-pr-fingerprint", current["fingerprints"]["pr"],
+                "--expected-context-fingerprint", current["fingerprints"]["context"],
                 "--expected-threads-fingerprint", current["fingerprints"]["threads"],
                 "--expected-checks-fingerprint", current["fingerprints"]["checks"],
                 "--previous-snapshot", str(corrupted),
@@ -663,6 +673,7 @@ class ReviewSnapshotTests(unittest.TestCase):
                 "review_snapshot.py", "refresh", "--repo", "owner/repo", "--pr", "42",
                 "--expected-head", "head-1",
                 "--expected-pr-fingerprint", initial["fingerprints"]["pr"],
+                "--expected-context-fingerprint", initial["fingerprints"]["context"],
                 "--expected-threads-fingerprint", initial["fingerprints"]["threads"],
                 "--expected-checks-fingerprint", initial["fingerprints"]["checks"],
                 "--expected-base-name", "main", "--expected-base-sha", "base-1",
@@ -728,7 +739,7 @@ class ReviewSnapshotTests(unittest.TestCase):
 
     @staticmethod
     def with_issue(snapshot):
-        context = snapshot["pr"]["reviewContext"]
+        context = snapshot["context"]
         context["issues"] = [{
             "repo": "owner/repo", "number": 7, "url": "https://github.com/owner/repo/issues/7",
             "relations": ["closing"], "read_status": "read",
@@ -741,26 +752,79 @@ class ReviewSnapshotTests(unittest.TestCase):
         context["discussion_issues"] = ["owner/repo#7"]
         return ReviewSnapshotTests.with_fingerprints(snapshot)
 
-    def test_goal_evidence_changes_refresh_pr_without_head_change(self) -> None:
+    def test_requirement_evidence_changes_refresh_without_head_change(self) -> None:
         initial = self.with_issue(self.collect())
         changes = {
-            "title": lambda pr: pr.update(title="A narrower goal"),
-            "description": lambda pr: pr.update(body="Only preserve selected settings"),
-            "issue_body": lambda pr: pr["reviewContext"]["issues"][0]["issue"].update(body="Also persist offline"),
-            "issue_reply": lambda pr: pr["reviewContext"]["issues"][0]["comments"]["items"][0].update(body="Include private mode"),
-            "unlink": lambda pr: pr["reviewContext"].update(issues=[]),
+            "title": (lambda snapshot: snapshot["pr"].update(title="A narrower goal"), ["pr"]),
+            "description": (lambda snapshot: snapshot["pr"].update(body="Only preserve settings"), ["pr"]),
+            "issue_body": (lambda snapshot: snapshot["context"]["issues"][0]["issue"].update(body="Also persist offline"), ["context"]),
+            "issue_reply": (lambda snapshot: snapshot["context"]["issues"][0]["comments"]["items"][0].update(body="Include private mode"), ["context"]),
+            "unlink": (lambda snapshot: snapshot["context"].update(issues=[]), ["context"]),
         }
-        for name, change in changes.items():
+        for name, (change, expected_fields) in changes.items():
             with self.subTest(change=name):
                 current = copy.deepcopy(initial)
-                change(current["pr"])
+                change(current)
                 self.with_fingerprints(current)
                 result = self.refresh(initial, current)
                 self.assertFalse(result["unchanged"])
-                self.assertEqual(result["changed_fields"], ["pr"])
-                self.assertEqual(result["pr"], current["pr"])
+                self.assertEqual(result["changed_fields"], expected_fields)
+                for section in expected_fields:
+                    self.assertEqual(result[section], current[section])
                 self.assertNotIn("threads", result)
                 self.assertEqual(result["headRefOid"], initial["headRefOid"])
+
+    def test_requirement_change_does_not_resend_pr_evidence(self) -> None:
+        initial = self.with_issue(self.collect())
+        current = copy.deepcopy(initial)
+        current["context"]["issues"][0]["issue"]["body"] = "Also persist offline"
+        current["context"]["issues"][0]["comments"]["items"][0]["body"] = "Include private mode"
+        self.with_fingerprints(current)
+
+        refreshed = self.refresh(initial, current, previous_snapshot=copy.deepcopy(initial))
+
+        self.assertEqual(refreshed["changed_fields"], ["context"])
+        self.assertNotIn("pr", refreshed)
+        self.assertNotIn("context", refreshed)
+        self.assertNotIn("checks", refreshed)
+        delta = refreshed["context_delta"]
+        self.assertEqual(delta["removed_ids"], [])
+        self.assertEqual(
+            [f"{item['repo']}#{item['number']}" for item in delta["changed"]],
+            ["owner/repo#7"],
+        )
+        self.assertEqual(delta["changed"][0]["issue"]["body"], "Also persist offline")
+        self.assertEqual(
+            delta["changed"][0]["comments"]["items"][0]["body"], "Include private mode"
+        )
+        self.assertEqual(delta["coverage"], "bodies_collected")
+        self.assertEqual(delta["discussion_issues"], ["owner/repo#7"])
+        self.assertEqual([item["id"] for item in delta["index"]], ["owner/repo#7"])
+
+    def test_context_delta_reports_added_and_removed_sources(self) -> None:
+        initial = self.with_issue(self.collect())
+        current = copy.deepcopy(initial)
+        removed = copy.deepcopy(current["context"]["issues"][0])
+        removed.update(number=9, url="https://github.com/owner/repo/issues/9")
+        initial["context"]["issues"].append(removed)
+        self.with_fingerprints(initial)
+        current["context"]["issues"] = [current["context"]["issues"][0]]
+        candidate = copy.deepcopy(removed)
+        candidate.update(number=11, url="https://github.com/owner/repo/issues/11",
+                         read_status="read_failed", diagnostic="HTTP 403")
+        current["context"]["issues"].append(candidate)
+        self.with_fingerprints(current)
+
+        refreshed = self.refresh(initial, current, previous_snapshot=copy.deepcopy(initial))
+
+        delta = refreshed["context_delta"]
+        self.assertEqual(delta["removed_ids"], ["owner/repo#9"])
+        self.assertEqual(
+            [f"{item['repo']}#{item['number']}" for item in delta["changed"]],
+            ["owner/repo#11"],
+        )
+        self.assertEqual([item["id"] for item in delta["index"]], ["owner/repo#7", "owner/repo#11"])
+        self.assertEqual(delta["coverage"], "partial")
 
     def test_collect_binds_issue_body_to_pr_evidence_without_waiting_for_checks(self) -> None:
         pr = pr_payload()
@@ -778,36 +842,37 @@ class ReviewSnapshotTests(unittest.TestCase):
         ):
             result = review_snapshot.collect_snapshot("owner/repo", 42)
         self.assertEqual(graphql.call_count, 1)
-        source = result["pr"]["reviewContext"]["issues"][0]
+        source = result["context"]["issues"][0]
         self.assertEqual(source["issue"]["body"], issue["body"])
         self.assertEqual(source["relations"], ["closing"])
         self.assertEqual(source["comments"]["status"], "not_requested")
         self.assertEqual(result["summary"]["context"]["coverage"], "bodies_collected")
         self.assertEqual(result["checks"]["exit_code"], 8)
         self.assertNotIn("reviewContext", pr)  # Do not mutate cached input metadata in place.
+        self.assertNotIn("reviewContext", result["pr"])
 
     def test_context_failure_is_not_an_empty_success(self) -> None:
         initial = self.with_issue(self.collect())
         current = copy.deepcopy(initial)
-        current["pr"]["reviewContext"]["issues"][0] = {
+        current["context"]["issues"][0] = {
             "repo": "owner/repo", "number": 7, "relations": ["closing"],
             "read_status": "permission_denied", "diagnostic": "HTTP 403",
         }
         self.with_fingerprints(current)
         result = self.refresh(initial, current)
         self.assertEqual(result["context_coverage"], "partial")
-        self.assertEqual(result["pr"]["reviewContext"]["issues"][0]["read_status"], "permission_denied")
+        self.assertEqual(result["context"]["issues"][0]["read_status"], "permission_denied")
 
     def test_diagnostic_wording_and_source_order_do_not_invalidate_evidence(self) -> None:
         initial = self.with_issue(self.collect())
-        another = copy.deepcopy(initial["pr"]["reviewContext"]["issues"][0])
+        another = copy.deepcopy(initial["context"]["issues"][0])
         another.update(number=8, read_status="read_failed", diagnostic="timeout at 10:00")
-        initial["pr"]["reviewContext"]["issues"].append(another)
+        initial["context"]["issues"].append(another)
         initial["pr"]["closingIssuesReferences"] = [{"url": "issue/8"}, {"url": "issue/7"}]
         self.with_fingerprints(initial)
         current = copy.deepcopy(initial)
-        current["pr"]["reviewContext"]["issues"].reverse()
-        current["pr"]["reviewContext"]["issues"][0]["diagnostic"] = "timeout at 11:00"
+        current["context"]["issues"].reverse()
+        current["context"]["issues"][0]["diagnostic"] = "timeout at 11:00"
         current["pr"]["closingIssuesReferences"].reverse()
         self.with_fingerprints(current)
         result = self.refresh(initial, current)
@@ -817,20 +882,23 @@ class ReviewSnapshotTests(unittest.TestCase):
     def test_legacy_snapshot_missing_context_requires_new_evidence(self) -> None:
         current = self.collect()
         legacy = copy.deepcopy(current)
-        del legacy["pr"]["reviewContext"]
-        self.with_fingerprints(legacy)
-        self.assertEqual(review_snapshot.review_context.coverage(legacy["pr"]), "not_collected")
+        legacy["pr"]["reviewContext"] = legacy.pop("context")
+        legacy["fingerprints"] = dict(current["fingerprints"], context="0" * 64)
+        self.assertEqual(review_snapshot.review_context.coverage(legacy.get("context")), "not_collected")
         result = self.refresh(legacy, current, previous_snapshot=legacy)
         self.assertFalse(result["unchanged"])
-        self.assertEqual(result["pr"]["reviewContext"]["schema_version"], 1)
+        self.assertIn("evidence_reset", result)
+        self.assertEqual(result["context"]["schema_version"], 1)
+        self.assertNotIn("reviewContext", result["pr"])
         self.assertEqual(result["context_coverage"], "bodies_collected")
 
     def test_refresh_inherits_sources_only_from_reviewed_previous_snapshot(self) -> None:
         initial = self.with_issue(self.collect())
-        initial["pr"]["reviewContext"]["requested_issues"] = ["other/repo#9"]
+        initial["context"]["requested_issues"] = ["other/repo#9"]
         self.with_fingerprints(initial)
         arguments = dict(
             expected_head=initial["headRefOid"], expected_pr_fingerprint=initial["fingerprints"]["pr"],
+            expected_context_fingerprint=initial["fingerprints"]["context"],
             expected_threads_fingerprint=initial["fingerprints"]["threads"],
             expected_checks_fingerprint=initial["fingerprints"]["checks"],
         )
@@ -838,7 +906,7 @@ class ReviewSnapshotTests(unittest.TestCase):
             review_snapshot.refresh_snapshot("owner/repo", 42, previous_snapshot=initial, **arguments)
         collect.assert_called_once_with("owner/repo", 42, issue_refs=["other/repo#9"], discussion_refs=["owner/repo#7"])
         tampered = copy.deepcopy(initial)
-        tampered["pr"]["reviewContext"]["requested_issues"] = ["secret/repo#10"]
+        tampered["context"]["requested_issues"] = ["secret/repo#10"]
         with patch.object(review_snapshot, "collect_snapshot", return_value=initial) as collect:
             result = review_snapshot.refresh_snapshot("owner/repo", 42, previous_snapshot=tampered, **arguments)
         collect.assert_called_once_with("owner/repo", 42)
@@ -851,8 +919,8 @@ class ReviewSnapshotTests(unittest.TestCase):
             storage_hash = review_snapshot.snapshot_transport.save(path, initial, initial)
             saved = review_snapshot.snapshot_transport.read(path, storage_hash)["snapshot"]
             page = review_snapshot.snapshot_transport.page(path, storage_hash, 0, 100000)
-        self.assertEqual(saved["pr"]["reviewContext"], initial["pr"]["reviewContext"])
-        self.assertEqual(json.loads(page["page"]["text"])["pr"]["reviewContext"], initial["pr"]["reviewContext"])
+        self.assertEqual(saved["context"], initial["context"])
+        self.assertEqual(json.loads(page["page"]["text"])["context"], initial["context"])
 
     def test_cli_passes_explicit_goal_and_discussion_sources(self) -> None:
         current = self.collect()
