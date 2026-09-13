@@ -12,14 +12,69 @@ from typing import Sequence
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 SKILLS_ROOT = REPOSITORY_ROOT / "skills"
 FRONTMATTER_PATTERN = re.compile(r"\A---\n(?P<body>.*?)\n---(?:\n|\Z)", re.DOTALL)
-NAME_PATTERN = re.compile(r"^name:\s*([^\n]+)$", re.MULTILINE)
-DESCRIPTION_PATTERN = re.compile(r"^description:\s*(?:\S|[>|])", re.MULTILINE)
+SKILL_NAME_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 MARKDOWN_LINK_PATTERN = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 CONFLICT_MARKER_PATTERN = re.compile(r"^(?:<<<<<<<|=======|>>>>>>>)", re.MULTILINE)
 LINKED_CATALOG_ROW_PATTERN = re.compile(
     r"^\|\s*\[`(?P<name>[a-z0-9-]+)`\]\((?P<target>[^)\n]+)\)\s*\|",
     re.MULTILINE,
 )
+MAX_NAME_LENGTH = 64
+MAX_DESCRIPTION_LENGTH = 1024
+
+
+def required_frontmatter_scalar(
+    frontmatter: str,
+    field: str,
+    label: str,
+) -> tuple[str | None, list[str]]:
+    """Read one required, repository-supported single-line YAML scalar."""
+
+    matches = re.findall(
+        rf"^{re.escape(field)}:[ \t]*(.*)$",
+        frontmatter,
+        re.MULTILINE,
+    )
+    if not matches:
+        return None, [f"{label}: missing {field}"]
+    if len(matches) > 1:
+        return None, [f"{label}: duplicate {field}"]
+
+    value = matches[0].strip()
+    if value.startswith(("|", ">")):
+        return None, [f"{label}: {field} must use a single-line scalar"]
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+        value = value[1:-1].strip()
+    if not value:
+        return None, [f"{label}: {field} must not be empty"]
+    return value, []
+
+
+def validate_frontmatter(frontmatter: str, directory_name: str, label: str) -> list[str]:
+    """Validate the deterministic Agent Skills metadata used by this repository."""
+
+    errors: list[str] = []
+    name, field_errors = required_frontmatter_scalar(frontmatter, "name", label)
+    errors.extend(field_errors)
+    if name is not None:
+        if len(name) > MAX_NAME_LENGTH or SKILL_NAME_PATTERN.fullmatch(name) is None:
+            errors.append(
+                f"{label}: name must be 1-{MAX_NAME_LENGTH} lowercase letters, "
+                "numbers, or single hyphens"
+            )
+        if name != directory_name:
+            errors.append(f"{label}: name does not match directory")
+
+    description, field_errors = required_frontmatter_scalar(
+        frontmatter, "description", label
+    )
+    errors.extend(field_errors)
+    if description is not None and len(description) > MAX_DESCRIPTION_LENGTH:
+        errors.append(
+            f"{label}: description exceeds {MAX_DESCRIPTION_LENGTH} characters"
+        )
+
+    return errors
 
 
 def validate_markdown_links(markdown_file: Path) -> list[str]:
@@ -49,17 +104,10 @@ def validate_skill(skill_directory: Path) -> list[str]:
         errors.append(f"{entrypoint.relative_to(REPOSITORY_ROOT)}: invalid frontmatter")
         return errors
 
-    frontmatter_body = frontmatter.group("body")
-    name_match = NAME_PATTERN.search(frontmatter_body)
-    if name_match is None:
-        errors.append(f"{entrypoint.relative_to(REPOSITORY_ROOT)}: missing name")
-    elif name_match.group(1).strip(' "\'') != skill_directory.name:
-        errors.append(
-            f"{entrypoint.relative_to(REPOSITORY_ROOT)}: name does not match directory"
-        )
-
-    if DESCRIPTION_PATTERN.search(frontmatter_body) is None:
-        errors.append(f"{entrypoint.relative_to(REPOSITORY_ROOT)}: missing description")
+    label = str(entrypoint.relative_to(REPOSITORY_ROOT))
+    errors.extend(
+        validate_frontmatter(frontmatter.group("body"), skill_directory.name, label)
+    )
 
     for markdown_file in skill_directory.rglob("*.md"):
         errors.extend(validate_markdown_links(markdown_file))
