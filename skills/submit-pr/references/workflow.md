@@ -3,6 +3,10 @@
 本文件说明 `submit_pr.py` 与调用 Agent 的职责，以及各阶段的检查和执行规则。执行
 `plan`、默认或 `draft` 模式时都要完整阅读。
 
+首次运行 helper 前选择一个可用的 Python 3.10+ 解释器；同一任务的 `plan` 和 `apply`
+使用同一解释器。这是 helper 的运行时要求，不是产品依赖；不要为此修改项目的 Python 配置。
+找不到兼容解释器时报告缺口，不声称 helper 已运行。
+
 ## Repository 拓扑发现
 
 helper 只接受指向 `github.com` 的 SSH 或 HTTPS remote，并按以下顺序解析：

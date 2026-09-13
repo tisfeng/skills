@@ -14,9 +14,9 @@
 | Skill | 用途 | 配套 Skill |
 | --- | --- | --- |
 | [`code-simplifier`](skills/code-simplifier/SKILL.md) | 在保持行为不变的前提下简化近期代码改动 | 无 |
-| [`git-commit`](skills/git-commit/SKILL.md) | 从暂存区创建经过校验的 Angular-style 双语提交 | 无 |
+| [`git-commit`](skills/git-commit/SKILL.md) | 起草、创建或汇报经过校验的 Angular-style 本地提交 | 无 |
 | [`review`](skills/review/SKILL.md) | 审查工作树、提交、提交范围、文件或模块 | 无 |
-| [`review-pr`](skills/review-pr/SKILL.md) | 准备并审查 GitHub Pull Request，完整处理 review threads | [`review`](skills/review/SKILL.md) |
+| [`review-pr`](skills/review-pr/SKILL.md) | 审查 GitHub Pull Request 的准确 diff、问题背景、CI 和 review threads | [`review`](skills/review/SKILL.md) |
 | [`submit-pr`](skills/submit-pr/SKILL.md) | 规划、推送并创建或复用 GitHub Pull Request | 需要提交时使用 [`git-commit`](skills/git-commit/SKILL.md) |
 | [`worktree-rebase-merge`](skills/worktree-rebase-merge/SKILL.md) | 提交 worktree 变更、执行 rebase，并安全合并到目标分支 | [`git-commit`](skills/git-commit/SKILL.md) |
 

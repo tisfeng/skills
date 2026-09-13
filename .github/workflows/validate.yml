@@ -38,8 +38,8 @@ jobs:
       - name: Test review
         run: python3 -m unittest discover -s skills/review/tests -p 'test_*.py'
 
-      - name: Test isolated skill consumers
-        run: python3 -m unittest discover -s tests -p 'test_skill_portability.py'
+      - name: Test shared skill contracts
+        run: python3 -m unittest discover -s tests -p 'test_*.py'
 
       - name: Test submit-pr
         run: python3 -m unittest discover -s skills/submit-pr/tests -p 'test_*.py'

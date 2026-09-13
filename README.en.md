@@ -14,9 +14,9 @@ This repository is part of the agent development workflow for [Easydict](https:/
 | Skill | Purpose | Companion Skill |
 | --- | --- | --- |
 | [`code-simplifier`](skills/code-simplifier/SKILL.md) | Simplify recent code changes without altering behavior | None |
-| [`git-commit`](skills/git-commit/SKILL.md) | Create validated Angular-style bilingual commits from staged changes | None |
+| [`git-commit`](skills/git-commit/SKILL.md) | Draft, create, or report validated Angular-style local commits | None |
 | [`review`](skills/review/SKILL.md) | Review a working tree, commit, commit range, file, or module | None |
-| [`review-pr`](skills/review-pr/SKILL.md) | Prepare and review GitHub pull requests, including complete review threads | [`review`](skills/review/SKILL.md) |
+| [`review-pr`](skills/review-pr/SKILL.md) | Review exact GitHub pull request diffs, issue context, CI, and review threads | [`review`](skills/review/SKILL.md) |
 | [`submit-pr`](skills/submit-pr/SKILL.md) | Plan, push, and create or reuse GitHub pull requests | [`git-commit`](skills/git-commit/SKILL.md) when a commit is needed |
 | [`worktree-rebase-merge`](skills/worktree-rebase-merge/SKILL.md) | Commit worktree changes, rebase them, and safely merge into a target branch | [`git-commit`](skills/git-commit/SKILL.md) |
 

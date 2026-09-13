@@ -310,10 +310,16 @@ class SkillPortabilityTests(unittest.TestCase):
         agents = self.consumer / "AGENTS.md"
         agents.write_text("Do not create commits or modify Git refs.\n", encoding="utf-8")
         (self.consumer / "example.txt").write_text("first\n", encoding="utf-8")
-        for command in (("git", "init"), ("git", "add", "example.txt"),
-                        ("git", "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-m", "initial")):
-            result = subprocess.run(command, cwd=self.consumer, text=True, capture_output=True, check=False)
-            self.assertEqual(result.returncode, 0, result.stderr)
+        self.git(self.consumer, "init")
+        self.git(self.consumer, "add", "example.txt")
+        self.git(
+            self.consumer,
+            "-c", "core.hooksPath=/dev/null",
+            "-c", "commit.gpgsign=false",
+            "-c", "user.name=Test",
+            "-c", "user.email=test@example.invalid",
+            "commit", "-m", "initial",
+        )
 
         index_before = (self.consumer / ".git" / "index").read_bytes()
         refs_before = subprocess.run(

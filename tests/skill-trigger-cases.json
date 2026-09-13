@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "pairs": [
+    {
+      "skills": ["code-simplifier", "review"],
+      "cases": [
+        {
+          "id": "simplify-without-review",
+          "request": "保持行为不变，把这段重复逻辑简化一下",
+          "expected_skill": "code-simplifier",
+          "excluded_skills": ["review"],
+          "why": "用户的主目标是行为不变的代码清理。"
+        },
+        {
+          "id": "review-without-simplifying",
+          "request": "审查当前提交，找出可复现的回归，不要修改代码",
+          "expected_skill": "review",
+          "excluded_skills": ["code-simplifier"],
+          "why": "用户要求只读缺陷审查，不是重构。"
+        }
+      ]
+    },
+    {
+      "skills": ["review", "review-pr"],
+      "cases": [
+        {
+          "id": "local-range-review",
+          "request": "审查 main..HEAD 的本地提交范围",
+          "expected_skill": "review",
+          "excluded_skills": ["review-pr"],
+          "why": "没有 GitHub PR 身份、CI 或线程上下文。"
+        },
+        {
+          "id": "github-pr-review",
+          "request": "审查 https://github.com/acme/app/pull/42，包括 CI 和所有未解决评论",
+          "expected_skill": "review-pr",
+          "excluded_skills": ["review"],
+          "why": "需要 GitHub PR 身份、远程快照和 review threads 编排。"
+        }
+      ]
+    },
+    {
+      "skills": ["review-pr", "submit-pr"],
+      "cases": [
+        {
+          "id": "inspect-existing-pr",
+          "request": "帮我 review PR #42，不要推送或修改远程",
+          "expected_skill": "review-pr",
+          "excluded_skills": ["submit-pr"],
+          "why": "目标是审查已有 PR，不是交付新 PR。"
+        },
+        {
+          "id": "create-pr-from-commits",
+          "request": "把当前已提交的分支推送并创建 GitHub PR",
+          "expected_skill": "submit-pr",
+          "excluded_skills": ["review-pr"],
+          "why": "目标是推送分支并创建 PR，不是审查。"
+        }
+      ]
+    },
+    {
+      "skills": ["git-commit", "worktree-rebase-merge"],
+      "cases": [
+        {
+          "id": "local-commit-only",
+          "request": "检查已暂存内容并创建一个本地提交，不 push",
+          "expected_skill": "git-commit",
+          "excluded_skills": ["worktree-rebase-merge"],
+          "why": "只需要本地提交，没有分支集成。"
+        },
+        {
+          "id": "integrate-worktree",
+          "request": "提交这个 worktree 的变更，rebase 到 main 并从 main worktree 合并",
+          "expected_skill": "worktree-rebase-merge",
+          "excluded_skills": ["git-commit"],
+          "why": "目标包含提交之后的 rebase 和目标 worktree merge。"
+        }
+      ]
+    }
+  ]
+}
