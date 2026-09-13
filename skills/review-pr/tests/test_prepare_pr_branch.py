@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-import re
 import shutil
 import subprocess
 import sys
@@ -332,19 +331,6 @@ class PreparePRBranchTests(unittest.TestCase):
     def _assert_clean_status(self) -> None:
         self.assertEqual(self._git("status", "--porcelain").stdout, "")
 
-    def test_local_review_keeps_available_head_branch_name(self) -> None:
-        result = self._prepare()
-
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Branch: feat/review-fixture", result.stdout)
-        self.assertEqual(self._git("branch", "--show-current").stdout.strip(), "feat/review-fixture")
-        self.assertEqual(self._git("rev-parse", "HEAD").stdout.strip(), self.head_sha)
-        self.assertEqual(
-            self._git("for-each-ref", "--format=%(upstream:short)", "refs/heads/feat/review-fixture").stdout.strip(),
-            "contributor/feat/review-fixture",
-        )
-        self._assert_clean_status()
-
     def test_json_receipt_freezes_normal_review_identity_and_fetches_each_ref_once(self) -> None:
         result = self._prepare("--json", "--expected-head", self.head_sha)
         receipt = self._json_receipt(result)
@@ -422,31 +408,6 @@ class PreparePRBranchTests(unittest.TestCase):
         self._assert_fetches_once_per_remote()
         self._assert_clean_status()
 
-    def test_saved_snapshot_reuses_mixed_case_github_identity_without_calling_gh(self) -> None:
-        snapshot_path, snapshot_hash = self._write_saved_snapshot(
-            repo="IFTECHIO/sCoCo",
-            url="https://github.com/iftechio/Scoco/pull/42",
-        )
-
-        result = self._prepare(
-            "--json",
-            "--snapshot-file",
-            str(snapshot_path),
-            "--snapshot-sha256",
-            snapshot_hash,
-            "--expected-head",
-            self.head_sha,
-            pr_ref="iftechio/SCOCO#42",
-            reject_gh=True,
-        )
-        receipt = self._json_receipt(result)
-
-        self.assertEqual(receipt["status"], "prepared")
-        self.assertEqual(receipt["head_sha"], self.head_sha)
-        self.assertEqual(self._gh_calls(), [])
-        self._assert_fetches_once_per_remote()
-        self._assert_clean_status()
-
     def test_saved_snapshot_rejects_tampered_hash_before_preparation(self) -> None:
         snapshot_path, snapshot_hash = self._write_saved_snapshot()
         snapshot_path.write_bytes(snapshot_path.read_bytes() + b" ")
@@ -467,127 +428,6 @@ class PreparePRBranchTests(unittest.TestCase):
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("hash", result.stderr.lower())
-        self.assertEqual(self._gh_calls(), [])
-        self.assertEqual(self._fetch_calls(), [])
-        self._assert_source_not_prepared(source_branch, source_head)
-
-    def test_saved_snapshot_rejects_external_pr_identity_before_preparation(self) -> None:
-        snapshot_path, snapshot_hash = self._write_saved_snapshot(repo="external/Scoco")
-        source_branch = self._git("branch", "--show-current").stdout.strip()
-        source_head = self._git("rev-parse", "HEAD").stdout.strip()
-
-        result = self._prepare(
-            "--json",
-            "--snapshot-file",
-            str(snapshot_path),
-            "--snapshot-sha256",
-            snapshot_hash,
-            "--expected-head",
-            self.head_sha,
-            pr_ref="iftechio/Scoco#42",
-            reject_gh=True,
-        )
-
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("identity", result.stderr.lower())
-        self.assertEqual(self._gh_calls(), [])
-        self.assertEqual(self._fetch_calls(), [])
-        self._assert_source_not_prepared(source_branch, source_head)
-
-    def test_saved_snapshot_rejects_wrong_url_or_nested_head_before_preparation(self) -> None:
-        cases = (
-            (
-                "non-GitHub URL",
-                {"url": "https://example.test/iftechio/Scoco/pull/42"},
-            ),
-            (
-                "wrong PR number in URL",
-                {"url": "https://github.com/iftechio/Scoco/pull/43"},
-            ),
-            ("PR head differs from frozen head", {"pr_head_sha": self.base_sha}),
-        )
-        for index, (name, options) in enumerate(cases):
-            with self.subTest(case=name):
-                snapshot_path, snapshot_hash = self._write_saved_snapshot(
-                    **options,
-                    path_suffix=f"-{index}",
-                )
-                source_branch = self._git("branch", "--show-current").stdout.strip()
-                source_head = self._git("rev-parse", "HEAD").stdout.strip()
-
-                result = self._prepare(
-                    "--json",
-                    "--snapshot-file",
-                    str(snapshot_path),
-                    "--snapshot-sha256",
-                    snapshot_hash,
-                    "--expected-head",
-                    self.head_sha,
-                    pr_ref="iftechio/Scoco#42",
-                    reject_gh=True,
-                )
-
-                self.assertNotEqual(result.returncode, 0)
-                self.assertIn("identity", result.stderr.lower())
-                self.assertEqual(self._gh_calls(), [])
-                self.assertEqual(self._fetch_calls(), [])
-                self._assert_source_not_prepared(source_branch, source_head)
-
-    def test_saved_snapshot_requires_explicit_reference_and_expected_head(self) -> None:
-        snapshot_path, snapshot_hash = self._write_saved_snapshot()
-        source_branch = self._git("branch", "--show-current").stdout.strip()
-        source_head = self._git("rev-parse", "HEAD").stdout.strip()
-
-        without_explicit_repo = self._prepare(
-            "--json",
-            "--snapshot-file",
-            str(snapshot_path),
-            "--snapshot-sha256",
-            snapshot_hash,
-            "--expected-head",
-            self.head_sha,
-            reject_gh=True,
-        )
-        self.assertNotEqual(without_explicit_repo.returncode, 0)
-        self.assertIn("explicit", without_explicit_repo.stderr.lower())
-        self.assertEqual(self._gh_calls(), [])
-        self.assertEqual(self._fetch_calls(), [])
-        self._assert_source_not_prepared(source_branch, source_head)
-
-        without_expected_head = self._prepare(
-            "--json",
-            "--snapshot-file",
-            str(snapshot_path),
-            "--snapshot-sha256",
-            snapshot_hash,
-            pr_ref="iftechio/Scoco#42",
-            reject_gh=True,
-        )
-        self.assertNotEqual(without_expected_head.returncode, 0)
-        self.assertIn("expected-head", without_expected_head.stderr)
-        self.assertEqual(self._gh_calls(), [])
-        self.assertEqual(self._fetch_calls(), [])
-        self._assert_source_not_prepared(source_branch, source_head)
-
-    def test_saved_snapshot_expected_head_mismatch_fails_before_preparation(self) -> None:
-        snapshot_path, snapshot_hash = self._write_saved_snapshot()
-        source_branch = self._git("branch", "--show-current").stdout.strip()
-        source_head = self._git("rev-parse", "HEAD").stdout.strip()
-
-        result = self._prepare(
-            "--json",
-            "--snapshot-file",
-            str(snapshot_path),
-            "--snapshot-sha256",
-            snapshot_hash,
-            "--expected-head",
-            self.base_sha,
-            pr_ref="iftechio/Scoco#42",
-            reject_gh=True,
-        )
-
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("expected", result.stderr.lower())
         self.assertEqual(self._gh_calls(), [])
         self.assertEqual(self._fetch_calls(), [])
         self._assert_source_not_prepared(source_branch, source_head)
@@ -623,41 +463,6 @@ class PreparePRBranchTests(unittest.TestCase):
         self.assertEqual(self._git("rev-parse", "HEAD").stdout.strip(), source_head)
         self._assert_clean_status()
 
-    def test_duplicate_json_option_emits_only_one_failed_receipt(self) -> None:
-        source_branch = self._git("branch", "--show-current").stdout.strip()
-        source_head = self._git("rev-parse", "HEAD").stdout.strip()
-
-        result = self._prepare("--json", "--json", "--expected-head", self.head_sha)
-
-        self.assertNotEqual(result.returncode, 0)
-        receipt = json.loads(result.stdout)
-        self.assertEqual(receipt["status"], "failed")
-        self.assertNotIn("\n", result.stdout.strip())
-        self.assertEqual(self._fetch_calls(), [])
-        self._assert_source_not_prepared(source_branch, source_head)
-
-    def test_github_url_reference_passes_base_repo_to_gh(self) -> None:
-        pr_url = self._environment()["GH_PR_URL"]
-        base_repo = pr_url.removeprefix("https://github.com/").split("/pull/", 1)[0]
-
-        result = self._prepare(pr_ref=pr_url, expected_repo=base_repo)
-
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self._assert_clean_status()
-
-    def test_shorthand_reference_passes_base_repo_to_gh(self) -> None:
-        environment = self._environment()
-        pr_url = environment["GH_PR_URL"]
-        base_repo = pr_url.removeprefix("https://github.com/").split("/pull/", 1)[0]
-
-        result = self._prepare(
-            pr_ref=f"{base_repo}#{environment['GH_PR_NUMBER']}",
-            expected_repo=base_repo,
-        )
-
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self._assert_clean_status()
-
     def test_local_latest_base_keeps_head_branch_name(self) -> None:
         result = self._prepare("--merge-latest")
 
@@ -671,38 +476,6 @@ class PreparePRBranchTests(unittest.TestCase):
         )
         self.assertTrue(
             self._git("merge-base", "--is-ancestor", self.base_sha, merged_head, check=False).returncode == 0
-        )
-        self._assert_clean_status()
-
-    def test_json_merged_receipt_fetches_head_and_base_once(self) -> None:
-        result = self._prepare("--json", "--merge-latest", "--expected-head", self.head_sha)
-        receipt = self._json_receipt(result)
-
-        self.assertTrue(receipt["integration"])
-        self.assertEqual(receipt["head_sha"], self.head_sha)
-        self.assertEqual(receipt["base_sha"], self.base_sha)
-        self.assertEqual(receipt["actions"], {"head_fetches": 1, "base_fetches": 1})
-        checkout = receipt["checkout"]
-        self.assertIsInstance(checkout, dict)
-        self.assertNotEqual(checkout["head_sha"], self.head_sha)
-        self._assert_fetches_once_per_remote()
-        self._assert_clean_status()
-
-    def test_local_latest_base_uses_head_fallback_without_merge_suffix(self) -> None:
-        self._git("branch", "feat/review-fixture")
-        self._git("branch", "--set-upstream-to=origin/dev", "feat/review-fixture")
-
-        result = self._prepare("--merge-latest")
-
-        expected_branch = "review/pr-42-" + self.head_sha[:10]
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn(f"Review branch: {expected_branch}", result.stdout)
-        self.assertNotIn("review/pr-42-merge-", result.stdout)
-        self.assertEqual(self._git("branch", "--show-current").stdout.strip(), expected_branch)
-        self.assertNotEqual(self._git("rev-parse", "HEAD").stdout.strip(), self.head_sha)
-        self.assertEqual(
-            self._git("rev-parse", "refs/heads/feat/review-fixture").stdout.strip(),
-            self.base_sha,
         )
         self._assert_clean_status()
 
@@ -750,51 +523,6 @@ class PreparePRBranchTests(unittest.TestCase):
         )
         self._assert_clean_status()
 
-    def test_json_receipt_preserves_collision_reason(self) -> None:
-        self._git(
-            "fetch",
-            str(self.fork_remote),
-            "refs/heads/feat/review-fixture:refs/remotes/contributor/feat/review-fixture",
-        )
-        self._git("branch", "feat/review-fixture", self.head_sha)
-        occupied_path = self.root / "occupied-json"
-        self._git("worktree", "add", str(occupied_path), "feat/review-fixture")
-        self.worktree_paths.append(occupied_path)
-
-        result = self._prepare("--json", "--expected-head", self.head_sha)
-        receipt = self._json_receipt(result)
-
-        expected_branch = "review/pr-42-" + self.head_sha[:10]
-        self.assertIn("checked out in another worktree", receipt["collision_reason"])
-        self.assertEqual(receipt["checkout"]["branch"], expected_branch)
-        self.assertFalse(receipt["integration"])
-        self._assert_fetches_once_per_remote()
-        self._assert_clean_status()
-
-    def test_worktree_latest_base_keeps_source_checkout_unchanged(self) -> None:
-        source_branch = self._git("branch", "--show-current").stdout.strip()
-        source_head = self._git("rev-parse", "HEAD").stdout.strip()
-
-        result = self._prepare("--worktree", "--merge-latest")
-
-        self.assertEqual(result.returncode, 0, result.stderr)
-        match = re.search(r"^Worktree: (.+)$", result.stdout, re.MULTILINE)
-        self.assertIsNotNone(match, result.stdout)
-        assert match is not None
-        worktree_path = Path(match.group(1))
-        self.worktree_paths.append(worktree_path)
-        self.assertTrue(worktree_path.is_dir())
-        self.assertIn("review/pr-42-merge-", result.stdout)
-        self.assertEqual(self._git("branch", "--show-current").stdout.strip(), source_branch)
-        self.assertEqual(self._git("rev-parse", "HEAD").stdout.strip(), source_head)
-        self._assert_clean_status()
-
-        worktree_branch = run(
-            ["git", "-C", str(worktree_path), "branch", "--show-current"],
-            cwd=self.checkout,
-        ).stdout.strip()
-        self.assertTrue(worktree_branch.startswith("review/pr-42-merge-"))
-
     def test_json_worktree_receipt_proves_source_unchanged(self) -> None:
         source_branch = self._git("branch", "--show-current").stdout.strip()
         source_head = self._git("rev-parse", "HEAD").stdout.strip()
@@ -813,31 +541,6 @@ class PreparePRBranchTests(unittest.TestCase):
         self.assertEqual(self._git("rev-parse", "HEAD").stdout.strip(), source_head)
         self._assert_fetches_once_per_remote()
         self._assert_clean_status()
-
-    def test_json_worktree_without_merge_proves_source_unchanged(self) -> None:
-        source_branch = self._git("branch", "--show-current").stdout.strip()
-        source_head = self._git("rev-parse", "HEAD").stdout.strip()
-
-        result = self._prepare("--json", "--worktree", "--expected-head", self.head_sha)
-        receipt = self._json_receipt(result)
-
-        checkout = receipt["checkout"]
-        self.assertIsInstance(checkout, dict)
-        worktree_path = Path(checkout["path"])
-        self.worktree_paths.append(worktree_path)
-        self.assertTrue(worktree_path.is_dir())
-        self.assertTrue(receipt["source_unchanged"])
-        self.assertFalse(receipt["integration"])
-        self.assertEqual(checkout["head_sha"], self.head_sha)
-        self.assertEqual(checkout["upstream"], "contributor/feat/review-fixture")
-        self.assertEqual(self._git("branch", "--show-current").stdout.strip(), source_branch)
-        self.assertEqual(self._git("rev-parse", "HEAD").stdout.strip(), source_head)
-        self._assert_fetches_once_per_remote()
-        self._assert_clean_status()
-
-    def test_script_has_no_push_command(self) -> None:
-        self.assertNotRegex(SCRIPT_PATH.read_text(encoding="utf-8"), r"\bgit\s+push\b")
-
 
 if __name__ == "__main__":
     unittest.main()

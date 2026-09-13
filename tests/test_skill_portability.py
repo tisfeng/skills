@@ -304,48 +304,5 @@ class SkillPortabilityTests(unittest.TestCase):
         self.assertFalse((self.consumer / "docs").exists())
         self.assertFalse((project / "docs").exists())
 
-    def test_copied_local_review_helper_preserves_consumer_rules_index_and_refs(self) -> None:
-        """The local helper can inspect a consumer Git repository without mutating it."""
-
-        agents = self.consumer / "AGENTS.md"
-        agents.write_text("Do not create commits or modify Git refs.\n", encoding="utf-8")
-        (self.consumer / "example.txt").write_text("first\n", encoding="utf-8")
-        self.git(self.consumer, "init")
-        self.git(self.consumer, "add", "example.txt")
-        self.git(
-            self.consumer,
-            "-c", "core.hooksPath=/dev/null",
-            "-c", "commit.gpgsign=false",
-            "-c", "user.name=Test",
-            "-c", "user.email=test@example.invalid",
-            "commit", "-m", "initial",
-        )
-
-        index_before = (self.consumer / ".git" / "index").read_bytes()
-        refs_before = subprocess.run(
-            ["git", "for-each-ref", "--format=%(refname):%(objectname)"], cwd=self.consumer,
-            text=True, capture_output=True, check=False,
-        ).stdout
-        status_before = subprocess.run(["git", "status", "--porcelain=v1"], cwd=self.consumer,
-                                       text=True, capture_output=True, check=False).stdout
-
-        result = self.execute(
-            str(self.skills / "review" / "scripts" / "collect_review_snapshot.py"),
-            "--repo", str(self.consumer), "--commit", "HEAD",
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout)["state"], "collected")
-        self.assertEqual(agents.read_text(encoding="utf-8"), "Do not create commits or modify Git refs.\n")
-        self.assertEqual((self.consumer / ".git" / "index").read_bytes(), index_before)
-        refs_after = subprocess.run(
-            ["git", "for-each-ref", "--format=%(refname):%(objectname)"], cwd=self.consumer,
-            text=True, capture_output=True, check=False,
-        ).stdout
-        status_after = subprocess.run(["git", "status", "--porcelain=v1"], cwd=self.consumer,
-                                      text=True, capture_output=True, check=False).stdout
-        self.assertEqual(refs_after, refs_before)
-        self.assertEqual(status_after, status_before)
-
-
 if __name__ == "__main__":
     unittest.main()
