@@ -2,7 +2,7 @@
 
 - 日期：2026-09-13
 - 状态：completed
-- 关联计划：[精简通用 Skill 路由与入口](../../exec-plans/completed/2026-09-13-streamline-skill-routing.md)
+- 关联计划：[精简通用 Skill 路由与入口](../../exec-plans/completed/2026-09/2026-09-13-streamline-skill-routing.md)
 
 ## 目标
 

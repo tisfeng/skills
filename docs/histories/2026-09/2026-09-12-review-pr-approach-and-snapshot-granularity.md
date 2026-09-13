@@ -2,7 +2,7 @@
 
 - 日期：2026-09-12
 - 状态：completed
-- 关联计划：[PR 实现方式审查与需求证据指纹拆分](../../exec-plans/completed/2026-09-12-review-pr-approach-and-snapshot-granularity.md)
+- 关联计划：[PR 实现方式审查与需求证据指纹拆分](../../exec-plans/completed/2026-09/2026-09-12-review-pr-approach-and-snapshot-granularity.md)
 
 ## 目标
 

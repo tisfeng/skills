@@ -1,7 +1,7 @@
 # 补齐 review-pr 手动快照的 head 复验
 
 - 日期：2026-09-10
-- 关联计划：[执行计划](../../exec-plans/completed/2026-09-10-fix-review-pr-fallback.md)
+- 关联计划：[执行计划](../../exec-plans/completed/2026-09/2026-09-10-fix-review-pr-fallback.md)
 
 ## 已落地变更
 

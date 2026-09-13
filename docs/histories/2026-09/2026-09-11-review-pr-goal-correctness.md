@@ -31,4 +31,4 @@
 
 ## 关联计划
 
-[PR 功能目标审查](../../exec-plans/completed/2026-09-11-review-pr-goal-correctness.md)
+[PR 功能目标审查](../../exec-plans/completed/2026-09/2026-09-11-review-pr-goal-correctness.md)

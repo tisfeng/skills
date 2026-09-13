@@ -2,7 +2,7 @@
 
 - 日期：2026-09-09
 - 状态：completed
-- 关联计划：[`docs/exec-plans/completed/2026-09-09-clarify-planner-delegation.md`](../../exec-plans/completed/2026-09-09-clarify-planner-delegation.md)
+- 关联计划：[`docs/exec-plans/completed/2026-09/2026-09-09-clarify-planner-delegation.md`](../../exec-plans/completed/2026-09/2026-09-09-clarify-planner-delegation.md)
 
 ## 目标
 

@@ -2,7 +2,7 @@
 
 - 日期：2026-09-10
 - 状态：completed
-- 关联计划：[执行计划](../../exec-plans/completed/2026-09-10-streamline-git-integration.md)
+- 关联计划：[执行计划](../../exec-plans/completed/2026-09/2026-09-10-streamline-git-integration.md)
 
 ## 目标
 

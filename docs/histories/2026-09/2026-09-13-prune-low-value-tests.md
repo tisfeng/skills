@@ -2,7 +2,7 @@
 
 - 日期：2026-09-13
 - 状态：completed
-- 关联计划：[执行计划](../../exec-plans/completed/2026-09-13-prune-low-value-tests.md)
+- 关联计划：[执行计划](../../exec-plans/completed/2026-09/2026-09-13-prune-low-value-tests.md)
 
 ## 目标
 

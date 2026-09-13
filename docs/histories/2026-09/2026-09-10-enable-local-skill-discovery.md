@@ -27,4 +27,4 @@
 
 ## 关联
 
-- [执行计划](../../exec-plans/completed/2026-09-10-enable-local-skill-discovery.md)
+- [执行计划](../../exec-plans/completed/2026-09/2026-09-10-enable-local-skill-discovery.md)

@@ -2,7 +2,7 @@
 
 - 日期：2026-09-11
 - 状态：completed
-- 关联计划：[`docs/exec-plans/completed/2026-09-11-isolate-internal-release-skill.md`](../../exec-plans/completed/2026-09-11-isolate-internal-release-skill.md)
+- 关联计划：[`docs/exec-plans/completed/2026-09/2026-09-11-isolate-internal-release-skill.md`](../../exec-plans/completed/2026-09/2026-09-11-isolate-internal-release-skill.md)
 
 ## 目标
 

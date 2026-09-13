@@ -44,14 +44,14 @@ history 歧义与临时目录清理后断言均已修正。
 仅修改本仓库源码、文档、测试和验证 CI。未修改 Scoco、全局安装、其他 worktree、安装器或
 版本号，未 push、发布或操作真实 PR。其他 Git Skill 的全面通用化属于后续阶段。
 
-执行过程见 [完成计划](../../exec-plans/completed/2026-09-11-decouple-skill-host-policies.md)。
+执行过程见 [完成计划](../../exec-plans/completed/2026-09/2026-09-11-decouple-skill-host-policies.md)。
 
 ## 第二阶段：Git Skill 组合解耦
 
 用户继续要求“整理其他的技能，解耦”。本阶段从 `main` 的
 `276e16f57721fb8aa356ddb50d09f8e2a6b849cb` 开始，初始索引、工作树及未跟踪内容均为空。
 复用原任务 history；新增的
-[完成计划](../../exec-plans/completed/2026-09-11-decouple-git-skill-composition.md)
+[完成计划](../../exec-plans/completed/2026-09/2026-09-11-decouple-git-skill-composition.md)
 记录本阶段范围。宿主 `AGENTS.md`、`docs/agents/` 与子代理配置保持不变。
 
 `git-commit` 明确区分预览、创建提交、只推导分支名和汇报已有提交。调用方传入任务及已有

@@ -2,7 +2,7 @@
 
 - 日期：2026-09-10
 - 状态：completed
-- 关联计划：[执行计划](../../exec-plans/completed/2026-09-10-prefer-submit-pr-language.md)
+- 关联计划：[执行计划](../../exec-plans/completed/2026-09/2026-09-10-prefer-submit-pr-language.md)
 - 关联 PR：[#1](https://github.com/tisfeng/skills/pull/1)
 
 ## 目标与变更

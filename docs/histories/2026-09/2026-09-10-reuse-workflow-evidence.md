@@ -2,7 +2,7 @@
 
 - 日期：2026-09-10
 - 状态：completed
-- 关联计划：[执行计划](../../exec-plans/completed/2026-09-10-reuse-workflow-evidence.md)
+- 关联计划：[执行计划](../../exec-plans/completed/2026-09/2026-09-10-reuse-workflow-evidence.md)
 
 ## 目标与变更
 

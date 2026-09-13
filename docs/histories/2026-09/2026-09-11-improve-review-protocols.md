@@ -6,7 +6,7 @@
 本轮从 `053509d8a4b4efcf3673482630490df2fee8b1e0` 的干净任务分支实施，仅修改这两个技能的
 源码、参考协议、测试及同任务文档；不改 main，不 push，不操作真实 PR 或全局安装。
 
-执行计划：[改进 review 执行协议](../../exec-plans/completed/2026-09-11-improve-review-protocols.md)。
+执行计划：[改进 review 执行协议](../../exec-plans/completed/2026-09/2026-09-11-improve-review-protocols.md)。
 
 ## 已落地
 

@@ -2,7 +2,7 @@
 
 - 日期：2026-09-08
 - 状态：completed
-- 关联计划：[`docs/exec-plans/completed/2026-09-08-restore-auto-local-commit.md`](../../exec-plans/completed/2026-09-08-restore-auto-local-commit.md)
+- 关联计划：[`docs/exec-plans/completed/2026-09/2026-09-08-restore-auto-local-commit.md`](../../exec-plans/completed/2026-09/2026-09-08-restore-auto-local-commit.md)
 
 ## 目标
 

@@ -34,4 +34,4 @@
 - 改动仅包含 review Skill、只读脚本、相关测试、CI 测试入口和本任务文档。
 - 实现阶段按用户要求保留工作区修改。用户随后显式调用 `git-commit`，交付续办使用
   `codex/perf-local-review-latency` 任务分支；不直接提交 main，不 push、发布或修改全局安装。
-- 同任务执行计划：[`本地 review 优化`](../../exec-plans/completed/2026-09-10-optimize-local-review-latency.md)。
+- 同任务执行计划：[`本地 review 优化`](../../exec-plans/completed/2026-09/2026-09-10-optimize-local-review-latency.md)。
