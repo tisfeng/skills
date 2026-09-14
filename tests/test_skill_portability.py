@@ -229,6 +229,14 @@ class SkillPortabilityTests(unittest.TestCase):
         self.assertFalse((self.consumer / "AGENTS.md").exists())
         self.assert_markdown_links_stay_in_copied_skill_closure()
         project = self.make_git_project()
+        repository_template = project / ".github" / "PULL_REQUEST_TEMPLATE.md"
+        repository_template.parent.mkdir()
+        repository_template.write_text(
+            "## 变更摘要\n\nRepository template marker\n\n"
+            "## 验证情况\n\nLegacy verification\n\n"
+            "## 关联上下文\n\nLegacy context\n",
+            encoding="utf-8",
+        )
         refs_before = self.git(project, "show-ref").stdout
         index_before = (project / ".git" / "index").read_bytes()
         status_before = self.git(project, "status", "--porcelain=v1").stdout
@@ -270,17 +278,49 @@ class SkillPortabilityTests(unittest.TestCase):
             str(self.standalone_submit / "scripts" / "submit_pr.py"), "plan",
             "--repo-root", str(project),
             "--title", "feat(cli): run copied helpers",
-            "--summary", "Exercise copied helper assets.",
+            "--context", "Copied helpers need a portable PR workflow.",
+            "--changes", "Exercise copied helper assets.",
             "--verification", "- Portable helper subprocesses passed.",
             environment=self.environment, cwd=project,
         )
         self.assertEqual(submit_plan.returncode, 0, submit_plan.stderr)
-        self.assertEqual(json.loads(submit_plan.stdout)["mode"], "plan")
+        submit_payload = json.loads(submit_plan.stdout)
+        self.assertEqual(submit_payload["mode"], "plan")
+        self.assertNotIn("Repository template marker", submit_payload["body"])
         self.assertNotIn(str(REPOSITORY_ROOT), str(submit_plan.args))
         self.assertFalse((project / "AGENTS.md").exists())
         self.assertEqual(self.git(project, "show-ref").stdout, refs_before)
         self.assertEqual((project / ".git" / "index").read_bytes(), index_before)
         self.assertEqual(self.git(project, "status", "--porcelain=v1").stdout, status_before)
+
+        self.git(project, "checkout", "--detach", "HEAD")
+        detached_refs = self.git(project, "show-ref").stdout
+        detached_status = self.git(project, "status", "--porcelain=v1").stdout
+        detached_plan = self.execute(
+            str(self.standalone_submit / "scripts" / "submit_pr.py"), "plan",
+            "--repo-root", str(project),
+            "--head-branch", "feat/portable-detached-helper",
+            "--title", "feat(cli): run copied helpers",
+            "--context", "Copied helpers need a portable PR workflow.",
+            "--changes", "Exercise copied helper assets from detached HEAD.",
+            "--verification", "- Portable helper subprocesses passed.",
+            environment=self.environment, cwd=project,
+        )
+        self.assertEqual(detached_plan.returncode, 0, detached_plan.stderr)
+        detached_payload = json.loads(detached_plan.stdout)
+        self.assertIsNone(detached_payload["current_branch"])
+        self.assertEqual(detached_payload["planned_branch_action"], "would-create")
+        self.assertEqual(self.git(project, "show-ref").stdout, detached_refs)
+        self.assertEqual((project / ".git" / "index").read_bytes(), index_before)
+        self.assertEqual(
+            self.git(project, "status", "--porcelain=v1").stdout,
+            detached_status,
+        )
+        self.assertEqual(
+            self.git(project, "branch", "--show-current").stdout,
+            "",
+        )
+        self.git(project, "checkout", "feat/portable-helper")
 
         agents = project / "AGENTS.md"
         agents_text = "Do not commit, update refs, or edit project rules.\n"
@@ -292,11 +332,16 @@ class SkillPortabilityTests(unittest.TestCase):
             str(self.skills / "submit-pr" / "scripts" / "submit_pr.py"), "plan",
             "--repo-root", str(project),
             "--title", "feat(cli): run copied helpers",
-            "--summary", "Exercise copied helper assets.",
+            "--context", "Copied helpers need a portable PR workflow.",
+            "--changes", "Exercise copied helper assets.",
             "--verification", "- Portable helper subprocesses passed.",
             environment=self.environment, cwd=project,
         )
         self.assertEqual(under_rules.returncode, 0, under_rules.stderr)
+        self.assertNotIn(
+            "Repository template marker",
+            json.loads(under_rules.stdout)["body"],
+        )
         self.assertEqual(agents.read_text(encoding="utf-8"), agents_text)
         self.assertEqual(self.git(project, "show-ref").stdout, refs_under_rules)
         self.assertEqual((project / ".git" / "index").read_bytes(), index_under_rules)
