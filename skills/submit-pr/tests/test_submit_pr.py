@@ -363,6 +363,99 @@ class WorkflowIntegrationTests(unittest.TestCase):
         self.assertEqual(fetch_after, fetch_before)
         self.assertFalse((self.repo / ".tmp" / "submit-pr").exists())
 
+    def test_detached_plan_previews_branch_creation_without_mutation(self) -> None:
+        run(
+            ["git", "config", "branch.main.gh-merge-base", "obsolete"],
+            cwd=self.repo,
+        )
+        run(["git", "checkout", "--detach", self.head_sha], cwd=self.repo)
+        refs_before = run(["git", "show-ref"], cwd=self.repo).stdout
+        status_before = run(["git", "status", "--porcelain=v1"], cwd=self.repo).stdout
+
+        payload = json.loads(
+            run(self.command("plan"), cwd=self.repo, env=self.environment()).stdout
+        )
+
+        self.assertIsNone(payload["current_branch"])
+        self.assertEqual(payload["base"], "main")
+        self.assertEqual(payload["head_branch"], "feat/deterministic-pr-submission")
+        self.assertEqual(payload["planned_branch_action"], "would-create")
+        self.assertEqual(run(["git", "show-ref"], cwd=self.repo).stdout, refs_before)
+        self.assertEqual(
+            run(["git", "status", "--porcelain=v1"], cwd=self.repo).stdout,
+            status_before,
+        )
+        self.assertEqual(
+            run(["git", "branch", "--show-current"], cwd=self.repo).stdout,
+            "",
+        )
+
+    def test_detached_plan_suffixes_a_divergent_local_branch(self) -> None:
+        base_tree = run(
+            ["git", "rev-parse", f"{self.base_sha}^{{tree}}"],
+            cwd=self.repo,
+        ).stdout.strip()
+        divergent_sha = run(
+            [
+                "git",
+                "commit-tree",
+                base_tree,
+                "-p",
+                self.base_sha,
+                "-m",
+                "chore: occupy task branch",
+            ],
+            cwd=self.repo,
+        ).stdout.strip()
+        run(
+            [
+                "git",
+                "branch",
+                "feat/deterministic-pr-submission",
+                divergent_sha,
+            ],
+            cwd=self.repo,
+        )
+        run(["git", "checkout", "--detach", self.head_sha], cwd=self.repo)
+        refs_before = run(["git", "show-ref"], cwd=self.repo).stdout
+        status_before = run(["git", "status", "--porcelain=v1"], cwd=self.repo).stdout
+
+        payload = json.loads(
+            run(self.command("plan"), cwd=self.repo, env=self.environment()).stdout
+        )
+
+        self.assertEqual(
+            payload["head_branch"],
+            "feat/deterministic-pr-submission-2",
+        )
+        self.assertEqual(payload["planned_branch_action"], "would-create")
+        self.assertEqual(run(["git", "show-ref"], cwd=self.repo).stdout, refs_before)
+        self.assertEqual(
+            run(["git", "status", "--porcelain=v1"], cwd=self.repo).stdout,
+            status_before,
+        )
+        self.assertEqual(
+            run(["git", "branch", "--show-current"], cwd=self.repo).stdout,
+            "",
+        )
+
+    def test_detached_plan_requires_agent_supplied_branch_without_mutation(self) -> None:
+        run(["git", "checkout", "--detach", self.head_sha], cwd=self.repo)
+        refs_before = run(["git", "show-ref"], cwd=self.repo).stdout
+
+        result = subprocess.run(
+            self.command("plan", head_branch=None),
+            cwd=self.repo,
+            env=self.environment(),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("--head-branch is required when HEAD is detached", result.stderr)
+        self.assertEqual(run(["git", "show-ref"], cwd=self.repo).stdout, refs_before)
+
     def test_plan_ignores_repository_pr_templates(self) -> None:
         template_directory = self.repo / ".github" / "PULL_REQUEST_TEMPLATE"
         template_directory.mkdir(parents=True)
@@ -513,6 +606,63 @@ class WorkflowIntegrationTests(unittest.TestCase):
             1,
         )
 
+    def test_detached_apply_creates_branch_without_attaching_checkout(self) -> None:
+        run(["git", "checkout", "--detach", self.head_sha], cwd=self.repo)
+
+        payload = json.loads(
+            run(self.command("apply"), cwd=self.repo, env=self.environment()).stdout
+        )
+
+        self.assertEqual(payload["branch_action"], "created")
+        self.assertEqual(payload["push_action"], "created")
+        self.assertEqual(payload["pr_action"], "created")
+        self.assertEqual(payload["pr_verification"]["status"], "passed")
+        self.assertEqual(
+            run(["git", "branch", "--show-current"], cwd=self.repo).stdout,
+            "",
+        )
+        self.assertEqual(
+            run(
+                [
+                    "git",
+                    "rev-parse",
+                    "refs/heads/feat/deterministic-pr-submission",
+                ],
+                cwd=self.repo,
+            ).stdout.strip(),
+            self.head_sha,
+        )
+
+        repeated = json.loads(
+            run(self.command("apply"), cwd=self.repo, env=self.environment()).stdout
+        )
+        self.assertEqual(repeated["branch_action"], "reused")
+        self.assertEqual(repeated["push_action"], "reused")
+        self.assertEqual(repeated["pr_action"], "reused")
+        self.assertEqual(
+            run(["git", "branch", "--show-current"], cwd=self.repo).stdout,
+            "",
+        )
+
+    def test_local_branch_write_rejects_checkout_state_drift(self) -> None:
+        run(["git", "checkout", "--detach", self.head_sha], cwd=self.repo)
+        run(["git", "checkout", "main"], cwd=self.repo)
+
+        with self.assertRaisesRegex(submit_pr.SubmitPRError, "checkout changed"):
+            submit_pr.ensure_local_branch(
+                self.repo,
+                None,
+                "feat/deterministic-pr-submission",
+                self.head_sha,
+            )
+
+        self.assertIsNone(
+            submit_pr.local_branch_sha(
+                self.repo,
+                "feat/deterministic-pr-submission",
+            )
+        )
+
     def test_apply_fast_forwards_existing_pr_after_new_local_commit(self) -> None:
         first_environment = self.environment()
         first = json.loads(
@@ -534,6 +684,11 @@ class WorkflowIntegrationTests(unittest.TestCase):
             cwd=self.repo,
         )
         self.head_sha = run(["git", "rev-parse", "HEAD"], cwd=self.repo).stdout.strip()
+
+        planned = json.loads(
+            run(self.command("plan"), cwd=self.repo, env=self.environment()).stdout
+        )
+        self.assertEqual(planned["planned_branch_action"], "would-update")
 
         second = json.loads(
             run(self.command("apply"), cwd=self.repo, env=self.environment()).stdout

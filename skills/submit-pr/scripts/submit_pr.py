@@ -120,6 +120,7 @@ class RepositoryContext:
     head_repository: str
     head_remote: str
     default_branch: str
+    current_branch: str | None
 
     @property
     def cross_repository(self) -> bool:
@@ -277,11 +278,9 @@ def select_unique(candidates: Sequence[str], description: str) -> str:
     return unique[0]
 
 
-def current_branch(repo_root: Path) -> str:
+def current_branch(repo_root: Path) -> str | None:
     branch = git_output(repo_root, "branch", "--show-current")
-    if not branch:
-        raise SubmitPRError("detached HEAD is not supported")
-    return branch
+    return branch or None
 
 
 def resolve_repository_context(
@@ -338,8 +337,10 @@ def resolve_repository_context(
         )
 
     current = current_branch(repo_root)
-    upstream = config_value(repo_root, f"branch.{current}.remote")
-    push_remote = config_value(repo_root, f"branch.{current}.pushRemote")
+    upstream = config_value(repo_root, f"branch.{current}.remote") if current else None
+    push_remote = (
+        config_value(repo_root, f"branch.{current}.pushRemote") if current else None
+    )
     remote_default = config_value(repo_root, "remote.pushDefault")
     if args.head_remote:
         head_candidates = [args.head_remote]
@@ -376,7 +377,12 @@ def resolve_repository_context(
             f"{base_repository} fork network"
         )
 
-    base_branch = args.base or config_value(repo_root, f"branch.{current}.gh-merge-base")
+    configured_base = (
+        config_value(repo_root, f"branch.{current}.gh-merge-base")
+        if current
+        else None
+    )
+    base_branch = args.base or configured_base
     base_branch = base_branch or base_info.default_branch
     return RepositoryContext(
         base_repository,
@@ -385,6 +391,7 @@ def resolve_repository_context(
         head_repository.name_with_owner,
         head_remote,
         base_info.default_branch,
+        current,
     )
 
 
@@ -487,6 +494,33 @@ def local_branch_sha(repo_root: Path, branch: str) -> str | None:
         detail = result.stderr.strip() or result.stdout.strip()
         raise SubmitPRError(f"cannot inspect local branch {branch}: {detail}")
     return result.stdout.strip()
+
+
+def local_branch_action(
+    repo_root: Path,
+    current: str | None,
+    branch: str,
+    head_sha: str,
+) -> str:
+    if current == branch:
+        return "current"
+    existing_sha = local_branch_sha(repo_root, branch)
+    if existing_sha is None:
+        return "created"
+    if existing_sha == head_sha:
+        return "reused"
+    ancestry = git_result(
+        repo_root,
+        "merge-base",
+        "--is-ancestor",
+        existing_sha,
+        head_sha,
+    )
+    if ancestry.returncode == 0:
+        return "updated"
+    raise SubmitPRError(
+        f"local branch {branch} changed while planning: {existing_sha}"
+    )
 
 
 def remote_branch_sha(
@@ -650,7 +684,7 @@ def protected_branches(
 
 def resolve_head_branch(
     repo_root: Path,
-    current: str,
+    current: str | None,
     protected: set[str],
     requested: str | None,
     head_sha: str,
@@ -663,8 +697,8 @@ def resolve_head_branch(
         validate_branch_name(repo_root, requested)
         if requested in protected:
             raise SubmitPRError(f"head branch is protected: {requested!r}")
-    current_is_task = current not in protected and (
-        BRANCH_PATTERN.fullmatch(current) or requested == current
+    current_is_task = current is not None and current not in protected and (
+        BRANCH_PATTERN.fullmatch(current) is not None or requested == current
     )
     if current_is_task:
         if requested and requested != current:
@@ -674,9 +708,12 @@ def resolve_head_branch(
         validate_branch_name(repo_root, current)
         return current, "current"
     if not requested:
-        raise SubmitPRError(
-            "--head-branch is required on a protected or non-Conventional branch"
+        reason = (
+            "when HEAD is detached"
+            if current is None
+            else "on a protected or non-Conventional branch"
         )
+        raise SubmitPRError(f"--head-branch is required {reason}")
     selected = choose_branch_name(
         repo_root,
         remote,
@@ -686,7 +723,7 @@ def resolve_head_branch(
         push_url=push_url,
         protected=protected,
     )
-    action = "created" if local_branch_sha(repo_root, selected) is None else "reused"
+    action = local_branch_action(repo_root, current, selected, head_sha)
     return selected, action
 
 
@@ -701,6 +738,11 @@ def build_plan(
     content = prepare_content(args)
     body = render_pr_body(content)
     branch = current_branch(repo_root)
+    if branch != context.current_branch:
+        raise SubmitPRError(
+            "checkout branch changed during planning: "
+            f"expected {context.current_branch!r}, got {branch!r}"
+        )
     status = parse_status(git_status_output(repo_root))
     head_sha, commits, files = ensure_commit_range(
         repo_root,
@@ -779,10 +821,18 @@ def check_github_auth(repo_root: Path) -> None:
 
 def ensure_local_branch(
     repo_root: Path,
-    current: str,
+    current: str | None,
     head_branch: str,
     head_sha: str,
 ) -> str:
+    actual_current = current_branch(repo_root)
+    actual_head = git_output(repo_root, "rev-parse", "HEAD")
+    if actual_current != current or actual_head != head_sha:
+        raise SubmitPRError(
+            "checkout changed after planning: "
+            f"expected branch {current!r} at {head_sha}, "
+            f"got {actual_current!r} at {actual_head}"
+        )
     if current == head_branch:
         return "current"
     existing_sha = local_branch_sha(repo_root, head_branch)
@@ -1041,6 +1091,7 @@ def plan_command(args: argparse.Namespace, repo_root: Path) -> dict[str, Any]:
     branch_action = plan.pop("branch_action")
     plan["planned_branch_action"] = {
         "created": "would-create",
+        "updated": "would-update",
         "reused": "would-reuse",
         "current": "current",
     }[branch_action]

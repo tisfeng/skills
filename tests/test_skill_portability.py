@@ -293,6 +293,35 @@ class SkillPortabilityTests(unittest.TestCase):
         self.assertEqual((project / ".git" / "index").read_bytes(), index_before)
         self.assertEqual(self.git(project, "status", "--porcelain=v1").stdout, status_before)
 
+        self.git(project, "checkout", "--detach", "HEAD")
+        detached_refs = self.git(project, "show-ref").stdout
+        detached_status = self.git(project, "status", "--porcelain=v1").stdout
+        detached_plan = self.execute(
+            str(self.standalone_submit / "scripts" / "submit_pr.py"), "plan",
+            "--repo-root", str(project),
+            "--head-branch", "feat/portable-detached-helper",
+            "--title", "feat(cli): run copied helpers",
+            "--context", "Copied helpers need a portable PR workflow.",
+            "--changes", "Exercise copied helper assets from detached HEAD.",
+            "--verification", "- Portable helper subprocesses passed.",
+            environment=self.environment, cwd=project,
+        )
+        self.assertEqual(detached_plan.returncode, 0, detached_plan.stderr)
+        detached_payload = json.loads(detached_plan.stdout)
+        self.assertIsNone(detached_payload["current_branch"])
+        self.assertEqual(detached_payload["planned_branch_action"], "would-create")
+        self.assertEqual(self.git(project, "show-ref").stdout, detached_refs)
+        self.assertEqual((project / ".git" / "index").read_bytes(), index_before)
+        self.assertEqual(
+            self.git(project, "status", "--porcelain=v1").stdout,
+            detached_status,
+        )
+        self.assertEqual(
+            self.git(project, "branch", "--show-current").stdout,
+            "",
+        )
+        self.git(project, "checkout", "feat/portable-helper")
+
         agents = project / "AGENTS.md"
         agents_text = "Do not commit, update refs, or edit project rules.\n"
         agents.write_text(agents_text, encoding="utf-8")

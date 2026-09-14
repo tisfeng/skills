@@ -28,7 +28,11 @@ PR 正文只使用 Skill 自带的 [固定模板](assets/pull_request_template.m
 
 1. 读取 [工作流契约](references/workflow.md)，确定用户语言、固定正文、Issue 策略、repository
    拓扑、base/head 分支与恢复规则。
-2. 记录 HEAD 和 staged、unstaged、untracked 边界。
+2. 记录 HEAD、当前分支和 staged、unstaged、untracked 边界。若 checkout 处于 detached 状态：
+   - 用户明确名称或项目既有命名优先；否则根据任务与只读 diff 选择最窄 Angular type，生成
+     `<type>/<english-kebab-case-summary>`。
+   - 使用 `git check-ref-format --branch` 验证字面名称，并在本轮 `plan` 与 `apply` 都显式传入
+     `--head-branch`；调用 Agent 不在 helper 之外创建或切换分支。
 3. `plan` 模式只使用现有提交和缓存的远程事实，运行 helper `plan` 并展示完整 PR 预览。
    缺少提交或 cached base 时报告预览缺口，不为使 plan 成功而写入。
 4. 默认或 `draft` 模式要求工作树可安全交付：
@@ -48,6 +52,8 @@ PR 正文只使用 Skill 自带的 [固定模板](assets/pull_request_template.m
 
 - 只支持 GitHub remote；拓扑有歧义时要求显式参数，不创建 fork。
 - 不 force push，不 rebase、merge、reset、stash、删除 remote/分支，不切换 checkout 或推送保护分支。
+- detached checkout 只在 helper `apply` 内从冻结 HEAD 创建或复用命名分支 ref；`plan` 不创建 ref，
+  `apply` 后 checkout 仍保持 detached。
 - 不自动添加 reviewer、label、milestone 或 project，不 merge PR、评论或关闭 Issue。
 - 只有 helper `apply` 返回成功且 `pr_verification.status == "passed"` 时才声称 PR 交付完成。
   默认不等待 CI；仅在用户或宿主规则要求时查询或等待 checks。

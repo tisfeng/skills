@@ -15,11 +15,11 @@ helper 只接受指向 `github.com` 的 SSH 或 HTTPS remote，并按以下顺�
    唯一根仓库；多个根仓库时停止。
 2. base remote：显式 `--base-remote`，否则唯一指向 base repository 的 remote；不能
    仅因名称是 `origin` 就信任它。
-3. base branch：显式 `--base`、当前分支的 `branch.<name>.gh-merge-base`、GitHub
-   repository 的 default branch。
-4. head remote：显式 `--head-remote`、`branch.<name>.pushRemote`、
-   `remote.pushDefault`、唯一 fork remote、当前 upstream、base remote。任一步产生多个
-   有效候选时停止。
+3. base branch：显式 `--base`、attached 当前分支的 `branch.<name>.gh-merge-base`、GitHub
+   repository 的 default branch；detached checkout 跳过 branch-scoped 配置。
+4. head remote：显式 `--head-remote`、attached 当前分支的 `branch.<name>.pushRemote`、
+   `remote.pushDefault`、唯一 fork remote、attached 当前 upstream、base remote。detached checkout
+   跳过 branch-scoped 配置；任一步产生多个有效候选时停止。
 5. head repository 必须与 base repository 位于同一 fork 网络；跨 fork PR 使用
    `<owner>:<branch>` 作为 `gh` 的 head 参数。
 
@@ -43,7 +43,10 @@ base branch、GitHub default branch 和重复传入的 `--protected-branch` 都�
 - 显式名称等于当前非保护分支时直接复用，不因其格式与默认值不同而另建分支。
 - 当前已经是默认 Conventional 非保护任务分支：直接使用；如果同时提供 `--head-branch`，名称必须相同。
 - 显式名称不得是保护分支；名称冲突时尝试的后缀候选同样跳过保护分支。
-- Detached HEAD：停止。
+- Detached HEAD：调用 Agent 根据用户明确名称、项目既有命名或任务与只读 diff 生成分支名，并向
+  helper 显式传入 `--head-branch`。helper 自身不从 PR 标题猜测名称；缺少参数时在写入前停止。
+  `plan` 以 `current_branch: null` 和 `would-create`、`would-update` 或 `would-reuse` 预览动作且不创建
+  ref；`apply` 从冻结 HEAD 创建、更新或复用本地 ref，不切换 checkout。
 
 apply 先 fetch 精确 base ref，再要求 `<base-remote>/<base>` 是 HEAD 的祖先且范围至少
 包含一个提交。该拓扑检查不替代调用 Agent 对提交范围和任务边界的语义审查。
@@ -53,6 +56,9 @@ apply 先 fetch 精确 base ref，再要求 `<base-remote>/<base>` 是 HEAD 的�
 - `plan` 使用 `GIT_OPTIONAL_LOCKS=0` 执行 Git 读取，可以报告 staged、unstaged 和
   untracked 状态，但不 fetch、不创建 ref、不写临时文件。
 - `apply` 要求工作树完全干净。
+- `apply` 在本地 ref 写入前重新检查 checkout 的 attached/detached 状态与 HEAD；与冻结计划不一致时
+  停止，并重新读取目标 ref。分支更新继续使用 Git 的 worktree 检出保护，不移动其他 worktree
+  正在使用的分支。
 - helper 不运行 `git add` 或 `git commit`。已有 staged 内容由调用 Agent 根据目标
   仓库交付规则处理；有 unstaged 或 untracked 内容时停止。
 - 默认/draft 的调用方在最终 plan 前完成允许的 staged 提交和精确 base fetch，解决首次提交或
@@ -184,6 +190,9 @@ helper 向 stdout 输出 JSON。apply 结果包含：
 - `timings_ms`：apply 的 worktree、认证、拓扑、fetch、计划复验、PR 查询、push、创建和最终验证
   等阶段耗时；用于诊断而不是固定性能承诺
 - `needs_screenshots`：UI 修改时为 `true`
+
+plan 结果包含 `current_branch`；detached checkout 为 `null`。`planned_branch_action` 使用
+`would-create`、`would-update`、`would-reuse` 或 `current`，且不会执行对应 Git 写入。
 
 调用 Agent 应直接使用成功 JSON 生成最终回执，不再为相同字段读取完整 PR 正文。只有 helper 返回
 成功并且 `pr_verification.status == "passed"` 时才可声称 PR 最终验证通过。
