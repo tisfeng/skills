@@ -53,6 +53,12 @@ def bilingual(
     )
 
 
+def references(*entries: str) -> str:
+    """Build one global references section."""
+
+    return "References:\n" + "\n".join(f"- {entry}" for entry in entries)
+
+
 class CommitMessageValidatorTests(unittest.TestCase):
     """Verify accepted forms, diagnostics, and Git-facing behavior."""
 
@@ -101,6 +107,31 @@ class CommitMessageValidatorTests(unittest.TestCase):
     def test_accepts_english_and_bilingual_messages(self) -> None:
         self.assert_valid(block() + "\n", "english")
         self.assert_valid(bilingual())
+
+    def test_accepts_one_global_references_section(self) -> None:
+        section = references(
+            "Apple TN3212: https://developer.apple.com/documentation/technotes/tn3212",
+            "https://github.com/example/project/issues/123",
+        )
+        self.assert_valid(block() + "\n\n" + section + "\n", "english")
+        self.assert_valid(bilingual().rstrip("\n") + "\n\n" + section + "\n")
+
+    def test_accepts_references_after_breaking_change_footers(self) -> None:
+        local = block(
+            "feat(agent)!: 强制校验提交信息",
+            footer="BREAKING CHANGE: 旧提交方式不再受支持。",
+        )
+        english = block(
+            "feat(agent)!: enforce commit message validation",
+            footer="BREAKING CHANGE: The old commit flow is unsupported.",
+        )
+        message = bilingual(local=local, english=english).rstrip("\n")
+        message += (
+            "\n\n"
+            + references("Migration: https://example.com/migration")
+            + "\n"
+        )
+        self.assert_valid(message)
 
     def test_rejects_two_or_four_body_paragraphs(self) -> None:
         self.assert_invalid(
@@ -195,13 +226,111 @@ class CommitMessageValidatorTests(unittest.TestCase):
                     "english",
                 )
 
+    def test_rejects_malformed_references_sections(self) -> None:
+        valid_section = references("Issue: https://github.com/example/project/issues/1")
+        cases = (
+            (
+                block() + "\n\nReferences:\n",
+                "requires at least 1 entry",
+            ),
+            (
+                block() + "\n" + valid_section + "\n",
+                "exactly one blank line before it",
+            ),
+            (
+                block() + "\n\nreferences:\n- https://example.com/reference\n",
+                "heading must be exactly 'References:'",
+            ),
+            (
+                block() + "\nReferences: https://example.com/reference\n",
+                "heading must be exactly 'References:'",
+            ),
+            (
+                block() + "\n\nReferences:\nIssue #1\n",
+                "must use '- [label: ]http(s)://...'",
+            ),
+            (
+                block() + "\n\nReferences:\n- Issue: example/project#1\n",
+                "must use '- [label: ]http(s)://...'",
+            ),
+            (
+                block() + "\n\nReferences:\n- Invalid: https://?missing-host\n",
+                "must end with an absolute HTTP(S) URL",
+            ),
+            (
+                block() + "\n\nReferences:\n- Invalid: https://[invalid\n",
+                "must end with an absolute HTTP(S) URL",
+            ),
+            (
+                block()
+                + "\n\n"
+                + references(
+                    "https://example.com/reference",
+                    "https://example.com/reference",
+                )
+                + "\n",
+                "contains duplicate URL",
+            ),
+            (
+                block()
+                + "\n\n"
+                + valid_section
+                + "\n\n"
+                + references("https://example.com/second")
+                + "\n",
+                "allows at most 1 References section",
+            ),
+        )
+        for message, expected_error in cases:
+            with self.subTest(expected_error=expected_error):
+                self.assert_invalid(message, expected_error, "english")
+
+    def test_rejects_references_before_the_final_body_paragraph(self) -> None:
+        message = "\n\n".join(
+            [
+                "fix(agent): enforce commit message validation",
+                "Body paragraph 1.",
+                "Body paragraph 2.",
+                references("https://example.com/reference"),
+                "Body paragraph 3.",
+            ]
+        )
+        self.assert_invalid(
+            message + "\n",
+            "must use '- [label: ]http(s)://...'",
+            "english",
+        )
+
+    def test_rejects_references_between_bilingual_blocks(self) -> None:
+        local = block("fix(agent): 强制校验提交信息")
+        message = (
+            local
+            + "\n\n"
+            + references("https://example.com/reference")
+            + "\n\n"
+            + SEPARATOR
+            + "\n\n"
+            + block()
+            + "\n"
+        )
+        self.assert_invalid(
+            message,
+            "must use '- [label: ]http(s)://...'",
+        )
+
     def test_commit_validation_matches_expected_file(self) -> None:
         self.git("init", "--quiet")
         self.git("config", "user.name", "Git Commit Tests")
         self.git("config", "user.email", "tests@example.com")
         self.git("config", "commit.gpgsign", "false")
         message_path = self.root / "expected.txt"
-        message_path.write_text(bilingual(), encoding="utf-8")
+        expected = bilingual().rstrip("\n")
+        expected += (
+            "\n\n"
+            + references("Issue: https://example.com/issues/123")
+            + "\n"
+        )
+        message_path.write_text(expected, encoding="utf-8")
         self.git("commit", "--quiet", "--allow-empty", "-F", str(message_path))
 
         result = subprocess.run(

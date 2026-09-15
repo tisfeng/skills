@@ -33,11 +33,38 @@ Third body paragraph explaining the result or impact.
 Optional BREAKING CHANGE: footer when applicable.
 ```
 
+整个提交还可以在所有语言区块之后使用一次可选的 `References:` 尾段；它不属于任一语言区块。
+
 - 使用范围最窄且准确的 Angular `type(scope): subject`，标题不超过 80 个字符。
 - 英文 subject 使用祈使式小写摘要，结尾无句号；非英文 subject 简洁且无句末标点。
 - 每个语言区块恰好三个自然正文段，依次说明上下文、主要变更和结果，通常每段 1–3 句。
 - 不使用 `Problem:`、`Change:` 或 `Summary:` 等标签；非英文与英文区块的含义、段落数和顺序一致。
-- 仅在不兼容变更时使用 `!` 或最终 `BREAKING CHANGE:` footer；footer 不能替代三个正文段。
+- 仅在不兼容变更时使用 `!` 或语言区块末尾的 `BREAKING CHANGE:` footer；footer 不能替代
+  三个正文段。全局 `References:` 尾段存在时排在所有语言区块及其 footer 之后。
+
+## 外部引用
+
+当前请求、已采纳的调查证据或 staged 内容包含直接影响本次动机、诊断、设计或验证的外部
+PR、Issue、review thread、文档或网页时，在整个提交末尾追加一次引用尾段：
+
+```text
+References:
+- Apple TN3212: https://developer.apple.com/documentation/technotes/tn3212-adopting-gesture-recognizers-for-sidecar-touch-support
+- BetterDisplay #5731: https://github.com/waydabber/BetterDisplay/issues/5731
+```
+
+- 固定使用不翻译的 `References:`，其前恰好一个空行；标题与条目之间不留空行。
+- 每个条目独占一行，以 `- ` 开头，可使用以 `: ` 分隔的简短标签，并以可直接跳转的绝对
+  HTTP(S) URL 结尾。
+- 整个提交最多一个引用尾段。按引用在正文中的首次出现顺序排列；正文未提及时，按已采纳
+  证据中的首次出现顺序排列，并按 URL 去重。
+- PR、Issue 和 review thread 优先使用精确页面或评论的 canonical URL，不使用仓库首页、搜索页
+  或只有编号的缩写。目标不能唯一确认时不猜测，先报告缺失的引用信息。
+- 正文必须说明引用与变更的关系及证据边界；引用尾段只提供跳转入口，不替代三个正文段，
+  也不把“行为一致”夸大为“已确认原因”。
+- 不因 staged 内容含有徽章、依赖主页、示例链接或普通文档链接就自动引用；只保留实际影响
+  本次决策的最小来源集合。
+- 不使用 `Closes:`、`Fixes:` 或 `Resolves:` 代替中性的 `References:`，避免引入 Issue 状态语义。
 
 ## Type 指南
 
