@@ -31,6 +31,12 @@ FOOTER_LIKE_PATTERN = re.compile(
     r"^(?:BREAKING[ -]CHANGE|[A-Za-z][A-Za-z0-9-]*)(?::| #)"
 )
 BREAKING_FOOTER_PATTERN = re.compile(r"^BREAKING CHANGE: \S")
+ENGLISH_BODY_LABELS = ("context: ", "change: ", "impact: ")
+CHINESE_BODY_LABELS = ("背景：", "变更：", "影响：")
+BODY_LABEL_LIKE_PATTERN = re.compile(
+    r"^(?:context|change|impact|result):",
+    re.I,
+)
 REFERENCES_HEADER = "References:"
 REFERENCES_HEADER_LIKE_PATTERN = re.compile(r"^[ \t]*references?[ \t]*:", re.I)
 REFERENCE_ITEM_PATTERN = re.compile(
@@ -193,7 +199,45 @@ def validate_header(text: str, block_name: str) -> Header:
     )
 
 
-def validate_block(block: str, block_name: str) -> Header:
+def validate_body_labels(
+    body: list[str],
+    block_name: str,
+    allowed_label_sets: tuple[tuple[str, str, str], ...],
+) -> None:
+    """Require one complete, ordered body-label set with non-empty content."""
+
+    selected_labels = next(
+        (
+            labels
+            for labels in allowed_label_sets
+            if body[0].startswith(labels[0])
+        ),
+        None,
+    )
+    if selected_labels is None:
+        expected = " or ".join(repr(labels[0]) for labels in allowed_label_sets)
+        raise ValidationError(
+            f"{block_name}: body paragraph 1 must start with {expected}"
+        )
+
+    for index, (paragraph, label) in enumerate(zip(body, selected_labels), start=1):
+        if not paragraph.startswith(label):
+            raise ValidationError(
+                f"{block_name}: body paragraph {index} must start with {label!r}"
+            )
+        content = paragraph[len(label) :]
+        if not content or content[0].isspace():
+            raise ValidationError(
+                f"{block_name}: body paragraph {index} must include content "
+                f"immediately after {label!r}"
+            )
+
+
+def validate_block(
+    block: str,
+    block_name: str,
+    allowed_label_sets: tuple[tuple[str, str, str], ...],
+) -> Header:
     """Validate one subject, three body paragraphs, and an optional footer."""
 
     paragraphs = split_paragraphs(block)
@@ -212,7 +256,9 @@ def validate_block(block: str, block_name: str) -> Header:
                 )
             has_breaking_footer = True
             continue
-        if FOOTER_LIKE_PATTERN.match(paragraph):
+        is_footer_like = FOOTER_LIKE_PATTERN.match(paragraph) is not None
+        is_body_label = BODY_LABEL_LIKE_PATTERN.match(paragraph) is not None
+        if is_footer_like and not is_body_label:
             raise ValidationError(
                 f"{block_name}: unsupported or malformed footer paragraph"
             )
@@ -222,6 +268,7 @@ def validate_block(block: str, block_name: str) -> Header:
         raise ValidationError(
             f"{block_name}: expected exactly 3 body paragraphs, found {len(body)}"
         )
+    validate_body_labels(body, block_name, allowed_label_sets)
     return Header(
         commit_type=header.commit_type,
         scope=header.scope,
@@ -278,18 +325,26 @@ def validate_message(message: str, mode: str) -> None:
             raise ValidationError(
                 "english message must not contain a language separator"
             )
-        validate_block(message_without_references, "English block")
+        validate_block(
+            message_without_references,
+            "English block",
+            (ENGLISH_BODY_LABELS,),
+        )
         return
 
     blocks = split_bilingual_message(message_without_references)
     headers: list[Header | None] = []
     errors: list[str] = []
-    for block, block_name in zip(
+    block_specs = (
+        ("Local-language block", (CHINESE_BODY_LABELS, ENGLISH_BODY_LABELS)),
+        ("English block", (ENGLISH_BODY_LABELS,)),
+    )
+    for block, (block_name, allowed_label_sets) in zip(
         blocks,
-        ("Local-language block", "English block"),
+        block_specs,
     ):
         try:
-            headers.append(validate_block(block, block_name))
+            headers.append(validate_block(block, block_name, allowed_label_sets))
         except ValidationError as error:
             headers.append(None)
             errors.append(str(error))

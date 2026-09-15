@@ -243,9 +243,9 @@ class SkillPortabilityTests(unittest.TestCase):
         message = self.consumer / "message.txt"
         message.write_text(
             "feat(cli): validate copied helper\n\n"
-            "Explain the portable test context.\n\n"
-            "Run the copied helper scripts.\n\n"
-            "Keep the consumer repository unchanged.\n",
+            "context: Explain the portable test context.\n\n"
+            "change: Run the copied helper scripts.\n\n"
+            "impact: Keep the consumer repository unchanged.\n",
             encoding="utf-8",
         )
 

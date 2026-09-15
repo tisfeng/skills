@@ -5,12 +5,13 @@
 
 ## 语言与结构
 
-按顺序使用第一个可用的用户首选语言：
+按以下优先级确定提交信息语言：
 
-1. 当前请求或对话中明确的语言偏好。
-2. 可读取的 locale，例如 macOS `AppleLanguages`、POSIX `LC_ALL`、`LC_MESSAGES`、
-   `LANG`、`locale` 或 Windows PowerShell culture。
-3. 当前对话已使用的语言。
+1. 用户明确指定的提交信息语言。
+2. 当前对话主要使用的自然语言。
+3. 系统偏好语言，仅在前两项无法判断时使用。
+
+仍无法判断时使用 English。
 
 英语使用 `english` 模式，只有一个英文区块。非英语使用 `bilingual` 模式，依次为本地
 语言区块、空行、严格 70 个字符的分隔线、空行和英文区块：
@@ -19,16 +20,30 @@
 ----------------------------------------------------------------------
 ```
 
-不添加 `Chinese:` 或 `English:` 等标签。每个语言区块使用：
+不添加 `Chinese:` 或 `English:` 等区块标签。中文本地语言区块使用：
 
 ```text
 type(scope): subject
 
-First body paragraph explaining the current context or motivation.
+背景：说明当前背景、问题或动机。
 
-Second body paragraph explaining the main change.
+变更：说明本次提交的主要修改。
 
-Third body paragraph explaining the result or impact.
+影响：说明修改后的行为、影响或保留边界。
+
+Optional BREAKING CHANGE: footer when applicable.
+```
+
+英文区块以及其他非中文的本地语言区块使用：
+
+```text
+type(scope): subject
+
+context: Explain the current context, problem, or motivation.
+
+change: Explain the main change made by this commit.
+
+impact: Explain the resulting behavior, impact, or preserved boundary.
 
 Optional BREAKING CHANGE: footer when applicable.
 ```
@@ -37,8 +52,10 @@ Optional BREAKING CHANGE: footer when applicable.
 
 - 使用范围最窄且准确的 Angular `type(scope): subject`，标题不超过 80 个字符。
 - 英文 subject 使用祈使式小写摘要，结尾无句号；非英文 subject 简洁且无句末标点。
-- 每个语言区块恰好三个自然正文段，依次说明上下文、主要变更和结果，通常每段 1–3 句。
-- 不使用 `Problem:`、`Change:` 或 `Summary:` 等标签；非英文与英文区块的含义、段落数和顺序一致。
+- 每个语言区块恰好三个自然正文段，依次说明背景、变更和影响，通常每段 1–3 句。
+- 中文区块依次使用 `背景：`、`变更：`、`影响：`，标记后直接接非空正文；英文标记依次使用
+  `context: `、`change: `、`impact: `，冒号后恰好一个空格再接非空正文。
+- 同一语言区块不能缺失、错序或混用两套标记；非英文与英文区块的含义、段落数和顺序一致。
 - 仅在不兼容变更时使用 `!` 或语言区块末尾的 `BREAKING CHANGE:` footer；footer 不能替代
   三个正文段。全局 `References:` 尾段存在时排在所有语言区块及其 footer 之后。
 
