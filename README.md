@@ -29,8 +29,7 @@
 
 ## 安装
 
-安装需要 Git。以下命令未指定 tag，会跟随仓库默认分支；lock 文件记录实际安装的源码 revision
-和内容哈希。
+安装需要 Git。以下命令可重复执行，每次都会获取仓库默认分支的最新内容。
 
 ### 项目安装（默认）
 
@@ -41,7 +40,7 @@ npx skills add tisfeng/skills --skill '*' --agent codex --yes
 ```
 
 `--skill '*'` 只匹配 `skills/` 下的公开技能。Skills 写入 `.agents/skills/` 并记录在
-`skills-lock.json` 中；请提交 lock 文件，确保团队使用相同的来源与内容。
+`skills-lock.json` 中。
 
 ### 全局安装
 
@@ -51,21 +50,7 @@ npx skills add tisfeng/skills --skill '*' --agent codex --yes
 npx skills add tisfeng/skills --skill '*' --agent codex --yes --global
 ```
 
-Skills 写入 `~/.codex/skills/`；全局 lock 由安装器维护，无需提交。
-
-## 更新
-
-更新当前项目安装的 Skills：
-
-```bash
-npx skills update --project
-```
-
-更新全局 Skills：
-
-```bash
-npx skills update --global
-```
+Skills 写入 `~/.agents/skills/`，lock 位于 `~/.agents/.skill-lock.json`。
 
 ## 许可证
 

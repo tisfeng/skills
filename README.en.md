@@ -26,7 +26,7 @@ Companion Skills are resolved from their actual load location and report the aff
 
 ## Installation
 
-Installing Skills requires Git. The commands below do not specify a tag, so they follow the repository's default branch; lock files record the source revision and content hashes installed.
+Installing Skills requires Git. These commands can be repeated and always fetch the latest content from the repository's default branch.
 
 ### Project installation (default)
 
@@ -36,7 +36,7 @@ Install every published Skill in the current project:
 npx skills add tisfeng/skills --skill '*' --agent codex --yes
 ```
 
-`--skill '*'` matches only the published Skills under `skills/`. Skills are written to `.agents/skills/` and recorded in `skills-lock.json`; commit the lock file so the team uses the same source revisions and content.
+`--skill '*'` matches only the published Skills under `skills/`. Skills are written to `.agents/skills/` and recorded in `skills-lock.json`.
 
 ### Global installation
 
@@ -46,21 +46,7 @@ Install every published Skill in Codex's global directory:
 npx skills add tisfeng/skills --skill '*' --agent codex --yes --global
 ```
 
-Skills are written to `~/.codex/skills/`. The installer maintains its global lock file, so it does not need to be committed.
-
-## Updating
-
-Update Skills installed for the current project:
-
-```bash
-npx skills update --project
-```
-
-Update global Skills:
-
-```bash
-npx skills update --global
-```
+Skills are written to `~/.agents/skills/`, and the lock file is stored at `~/.agents/.skill-lock.json`.
 
 ## License
 
