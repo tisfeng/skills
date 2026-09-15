@@ -24,5 +24,6 @@
 - 只读取当前任务需要的专题规则。
 - 验证：`docs/agents/build-and-test.md`。
 - 文档生命周期、宿主边界和 Skill 源码资产：`docs/agents/README.md`。
-- 代码、脚本、配置和文档质量：`docs/agents/development.md`。
+- 跨语言代码质量、命名、注释、依赖、CLI、配置和源码资产：
+  `docs/agents/coding-guidelines.md`。
 - 版本发布授权与流程：`docs/release/workflow.md`。
