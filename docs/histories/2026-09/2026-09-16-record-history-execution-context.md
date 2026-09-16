@@ -4,18 +4,18 @@
 - 状态：completed
 - 关联计划：none
 
-## Execution Context
+## 执行上下文
 
 - **Agent Name:** `Codex`
-- **Model ID:** `Unknown`
+- **Model:** `gpt-5.6-sol`
 
 ## 目标
 
-将 Easydict 的 history 执行上下文字段语义移植到 skills，记录明确的主执行 agent 和完整模型标识。
+将 Easydict 的 history 执行上下文字段语义移植到 skills，记录明确的主执行 agent 和模型信息。
 
 ## 实际变更
 
-- 在 history 模板中增加 `Agent Name` 和 `Model ID`，并约束字段来源。
+- 在 history 模板中增加 `Agent Name` 和 `Model`，并约束字段来源和取值优先级。
 - 不引入 `Runtime`，不修改公开 Skill 源码，也不回填既有 history。
 
 ## 验证

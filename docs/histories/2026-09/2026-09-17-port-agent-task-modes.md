@@ -4,10 +4,10 @@
 - 状态：completed
 - 关联计划：none
 
-## Execution Context
+## 执行上下文
 
 - **Agent Name:** `Codex`
-- **Model ID:** `Unknown`
+- **Model:** `gpt-5.6-sol`
 
 ## 目标
 
