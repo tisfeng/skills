@@ -14,10 +14,8 @@
   [history 模板](../histories/template.md) 记录结果；没有差异时不创建空记录。
 - plan 与 history 使用 `YYYY-MM-DD-<slug>.md`，同一任务共享 slug 并跨轮复用；存在 plan 时，
   history 链接归档后的 plan。只修改 history 的任务由该记录描述自身。
-- `<slug>` 的描述性部分使用小写 kebab-case。当其中包含具有标准写法、且改写会降低可识别性或
-  可追踪性的稳定标识时，可以保留该标识约定的点号；例如版本号可写为 `release-0.1.1` 或
-  `upgrade-skills-v0.3.8`。例外只适用于完整的稳定标识，周围描述仍使用 kebab-case；不使用空格、
-  下划线、大写字母、斜杠、反斜杠或冒号。
+- `<slug>` 使用小写 kebab-case；其中完整的标准标识可保留点号（如 `release-0.1.1`、
+  `upgrade-skills-v0.3.8`）。不使用空格、下划线、大写字母、斜杠、反斜杠或冒号。
 - plan 记录目标、范围、步骤、风险和验证；history 只记录最终变更和关键决策，不复制完整对话。
 - 自动本地交付将同任务 history 与其他变更一起校验和交付；显式提交既有 staged 内容不反向
   要求补写 history。
