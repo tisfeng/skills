@@ -52,4 +52,4 @@ Git Skill 自行定位配套能力和兼容运行时，缺依赖时在相应 Git
 独立 Planner 完成增量评估，并复用于三个只读消费者场景；场景前后 119 个文件哈希不变。
 这些场景带有先前上下文，不是盲测，也没有进行真实 GitHub 操作。独立 reviewer 检查生产、
 说明和最终测试；具体结果与验证边界记录在
-[同任务 history](../../histories/2026-09/2026-09-11-decouple-skill-host-policies.md)。
+[同任务 history](../../../histories/2026-09/2026-09-11-decouple-skill-host-policies.md)。

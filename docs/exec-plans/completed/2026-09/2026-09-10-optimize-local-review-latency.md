@@ -40,6 +40,6 @@
 - 结构、编译、Skill quick validation、YAML 与差异检查通过；独立 reviewer 未发现明确缺陷。
 - `83c25a4` 的两页 patch 拼接与 Git diff 字节一致；5 次首页 CLI 调用 138.73–151.64 ms，
   未变化复验输出 569 字节。只报告 helper 测量，不推断完整 Agent 端到端耗时。
-- 完成记录：[`同任务 history`](../../histories/2026-09/2026-09-10-optimize-local-review-latency.md)。
+- 完成记录：[`同任务 history`](../../../histories/2026-09/2026-09-10-optimize-local-review-latency.md)。
 - 实现阶段保留工作区修改；用户随后显式调用 `git-commit`，交付续办使用
   `codex/perf-local-review-latency` 任务分支，不直接提交 main，也不执行远程交付。

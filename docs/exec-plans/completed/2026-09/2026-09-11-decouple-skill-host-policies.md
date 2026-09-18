@@ -49,6 +49,6 @@
 
 职责清理、最终身份复验、消费者隔离测试及 CI 接入已完成。独立 reviewer 的 history 例外歧义
 和临时目录清理后断言两项反馈均已处理，增量复核无未解决 finding。具体检查与验证边界见
-[同任务 history](../../histories/2026-09/2026-09-11-decouple-skill-host-policies.md)。
+[同任务 history](../../../histories/2026-09/2026-09-11-decouple-skill-host-policies.md)。
 
 本轮保留既有 Git Skill 格式和角色配置；仅在本仓库精确本地交付，不发布或升级消费方。

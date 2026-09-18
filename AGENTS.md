@@ -14,10 +14,11 @@
 用户要求修改、修复、更新、实现或执行时，按以下顺序完成任务：
 
 1. **执行前**：首次写入前读取任务路由要求的专题规则；任何可能产生仓库差异的任务都必须读取
-   `docs/agents/README.md`，并按其规则判断 plan 和 history。
+   `exec-plans/README.md` 与 `histories/README.md`，并按其规则判断 plan 和 history。
 2. **实现与验证**：完成范围内修改并运行风险匹配的验证；失败时修复并重新验证。
-3. **Review**：生产代码、复杂逻辑、跨模块或高风险变更在验证通过后使用 `review` 技能审查；
-   修复有效 finding 后重新验证和审查。纯文档及简单低风险变更除外。
+3. **Review**：生产代码、复杂逻辑、跨模块或高风险变更在验证通过后使用
+   [`review`](.agents/skills/review/SKILL.md) 技能审查；修复有效 finding 后重新验证和审查。
+   纯文档及简单低风险变更除外。
 4. **交付**：更新 history，完成并归档已有 plan；必要验证和适用的 Review 通过后自动创建本地
    提交，用户明确要求不提交或没有差异时除外。
 
@@ -28,12 +29,17 @@
   要求时执行。
 - 回复以及新建或修改的仓库文档使用用户当前请求的语言；代码标识、API 名称、命令、路径、
   品牌名称和固定输出契约保留原文。
+- 现行规则文档单一职责，跨职责使用链接，不复制条款；文档使用相对仓库路径，
+  不提交机器本地绝对路径。
+- 历史记录与设计文档只在被当前任务明确采用时才构成约束。
 
 ## 任务路由
 
 - 只读取当前任务需要的专题规则。
-- 验证：`docs/agents/build-and-test.md`。
-- 文档生命周期、宿主边界和 Skill 源码资产：`docs/agents/README.md`。
+- 验证：[`build-and-test.md`](docs/agents/build-and-test.md)。
+- 计划与 history 记录：[`exec-plans/README.md`](docs/exec-plans/README.md) 与
+  [`histories/README.md`](docs/histories/README.md)。
+- Skill 源码资产与宿主边界：[`skills.md`](docs/agents/skills.md)。
 - 跨语言代码质量、命名、注释、依赖、CLI、配置和源码资产：
-  `docs/agents/coding-guidelines.md`。
-- 版本发布授权与流程：`docs/release/workflow.md`。
+  [`coding-guidelines.md`](docs/agents/coding-guidelines.md)。
+- 版本发布授权与流程：[`workflow.md`](docs/release/workflow.md)。

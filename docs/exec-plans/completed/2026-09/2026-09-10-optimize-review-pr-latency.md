@@ -3,7 +3,7 @@
 - 状态：completed
 - 创建日期：2026-09-10
 - 负责人：Codex
-- 同任务 history：[`docs/histories/2026-09/2026-09-10-optimize-review-pr-latency.md`](../../histories/2026-09/2026-09-10-optimize-review-pr-latency.md)
+- 同任务 history：[`docs/histories/2026-09/2026-09-10-optimize-review-pr-latency.md`](../../../histories/2026-09/2026-09-10-optimize-review-pr-latency.md)
 
 ## 目标与授权
 
