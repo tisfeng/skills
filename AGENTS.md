@@ -42,4 +42,4 @@
 - Skill 源码资产与宿主边界：[`skills.md`](docs/agents/skills.md)。
 - 跨语言代码质量、命名、注释、依赖、CLI、配置和源码资产：
   [`coding-guidelines.md`](docs/agents/coding-guidelines.md)。
-- 版本发布授权与流程：[`workflow.md`](docs/release/workflow.md)。
+- 版本发布授权与流程：[`release/README.md`](release/README.md)。
