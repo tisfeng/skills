@@ -13,12 +13,49 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  find-main-validation:
+    name: Find successful main validation
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      reusable: ${{ steps.find.outputs.reusable }}
+      run_id: ${{ steps.find.outputs.run_id }}
+    steps:
+      - name: Find validation for this commit
+        id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          run_json="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/validate.yml/runs?event=push&branch=main&head_sha=${GITHUB_SHA}&status=completed&per_page=100" \
+            --jq '[.workflow_runs[] | select(.name == "Validate Skills" and .event == "push" and .head_branch == "main" and .head_sha == env.GITHUB_SHA and .status == "completed" and .conclusion == "success") | {id, completed_at}] | sort_by(.completed_at) | last // empty')"
+          if [[ -n "$run_json" ]]; then
+            run_id="$(jq -r '.id' <<<"$run_json")"
+            echo "Found successful main validation run $run_id for $GITHUB_SHA."
+            echo "reusable=true" >>"$GITHUB_OUTPUT"
+            echo "run_id=$run_id" >>"$GITHUB_OUTPUT"
+          else
+            echo "No successful main validation found for $GITHUB_SHA; running full tag validation."
+            echo "reusable=false" >>"$GITHUB_OUTPUT"
+            echo "run_id=" >>"$GITHUB_OUTPUT"
+          fi
+
   validate:
+    if: needs.find-main-validation.outputs.reusable != 'true'
+    needs: find-main-validation
     uses: ./.github/workflows/validate.yml
 
   release:
     name: Create GitHub Release
-    needs: validate
+    if: ${{ always() && needs.find-main-validation.result == 'success' && (needs.validate.result == 'success' || needs.validate.result == 'skipped') }}
+    needs:
+      - find-main-validation
+      - validate
     runs-on: ubuntu-latest
     permissions:
       contents: write

@@ -1,0 +1,57 @@
+name: Validate Documentation
+
+on:
+  push:
+    branches:
+      - "**"
+    paths:
+      - "docs/exec-plans/**"
+      - "docs/histories/**"
+  pull_request:
+    paths:
+      - "docs/exec-plans/**"
+      - "docs/histories/**"
+
+permissions:
+  contents: read
+
+jobs:
+  docs:
+    name: Check documentation records
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check whitespace and current release links
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            git diff --check "${{ github.event.pull_request.base.sha }}...${GITHUB_SHA}"
+          elif [[ "${BEFORE_SHA}" =~ ^0+$ ]]; then
+            git diff --check "${GITHUB_SHA}^" "$GITHUB_SHA"
+          else
+            git diff --check "$BEFORE_SHA" "$GITHUB_SHA"
+          fi
+          if git grep -n 'docs/release' -- AGENTS.md docs/agents docs/exec-plans/README.md docs/histories/README.md release; then
+            echo 'Found an obsolete docs/release reference in current documentation.' >&2
+            exit 1
+          fi
+          test ! -e docs/release
+
+      - name: Check plan and history filenames
+        run: |
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          pattern = re.compile(r"^\d{4}-\d{2}-\d{2}-[a-z0-9]+(?:-[a-z0-9]+)*(?:\.\d+\.\d+)?\.md$")
+          roots = (Path("docs/exec-plans/active"), Path("docs/exec-plans/completed"), Path("docs/histories"))
+          invalid = [str(path) for root in roots if root.exists() for path in root.rglob("*.md") if path.name not in {"README.md", "template.md", "templates.md"} and not pattern.match(path.name)]
+          if invalid:
+              raise SystemExit("Invalid plan/history filenames:\n" + "\n".join(invalid))
+          PY

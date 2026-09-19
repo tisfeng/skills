@@ -2,7 +2,15 @@ name: Validate Skills
 
 on:
   push:
+    branches:
+      - "**"
+    paths-ignore:
+      - "docs/exec-plans/**"
+      - "docs/histories/**"
   pull_request:
+    paths-ignore:
+      - "docs/exec-plans/**"
+      - "docs/histories/**"
   workflow_call:
 
 permissions:

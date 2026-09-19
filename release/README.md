@@ -31,7 +31,8 @@ Release 标题必须精确使用 tag（例如 `v0.3.4`），正文由 GitHub 默
 3. 按 `git-commit` 创建 Angular-style 发布提交，之后记录完整发布 SHA。复验远程没有漂移后
    push `main`，等待该 SHA 的普通 CI 成功；后续 push、CI 和 tag 均核对该 SHA。
 4. 再次核验占用状态，在该发布提交创建并 push annotated `vX.Y.Z` tag。不移动或覆盖公开 tag。
-5. tag workflow 复用普通校验，再创建 GitHub Release；显式传入
+5. tag workflow 优先复用同一发布提交已经通过的 `main` 普通校验；只有找不到完全匹配的成功校验
+   时才回退到完整验证，再创建 GitHub Release。创建 Release 时显式传入
    `--title "$RELEASE_TAG" --generate-notes`，不传入手写正文。
 6. 等待 workflow 完成，核验 tag peeled SHA、GitHub Release 标题等于 tag 且正文为 GitHub
    默认生成内容，以及固定 tag Skills 的隔离安装。
@@ -47,3 +48,11 @@ Release 标题必须精确使用 tag（例如 `v0.3.4`），正文由 GitHub 默
 
 Release 正文策略见 [Release 说明策略](changelog/README.md)。静态检查和 workflow 配置只能
 证明流程代码一致；只有实际 CI、Release 和隔离安装才能证明发布成功。
+
+## 性能边界
+
+- `validate.yml` 的普通 push/PR 校验忽略纯 `docs/exec-plans/**` 和 `docs/histories/**` 变更；这些
+  变更由 `docs.yml` 执行 whitespace、现行发布入口和文件名检查。
+- 只要提交同时修改 `skills/`、`scripts/`、测试、workflow 或其他运行时资产，仍触发完整验证。
+- tag 发布只复用同一 SHA、`main` 分支、`push` 事件且 conclusion 为 `success` 的完整校验；API
+  查询失败或结果不明确时回退完整验证，不以“找不到结果”放行发布。
