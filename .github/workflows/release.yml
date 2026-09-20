@@ -31,9 +31,12 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          run_json="$(gh api \
+          if ! run_json="$(gh api \
             "repos/${GITHUB_REPOSITORY}/actions/workflows/validate.yml/runs?event=push&branch=main&head_sha=${GITHUB_SHA}&status=completed&per_page=100" \
-            --jq '[.workflow_runs[] | select(.name == "Validate Skills" and .event == "push" and .head_branch == "main" and .head_sha == env.GITHUB_SHA and .status == "completed" and .conclusion == "success") | {id, completed_at}] | sort_by(.completed_at) | last // empty')"
+            --jq '[.workflow_runs[] | select(.name == "Validate Skills" and .event == "push" and .head_branch == "main" and .head_sha == env.GITHUB_SHA and .status == "completed" and .conclusion == "success") | {id, updated_at}] | sort_by(.updated_at) | last // empty')"; then
+            echo "Unable to query main validation; running full tag validation."
+            run_json=""
+          fi
           if [[ -n "$run_json" ]]; then
             run_id="$(jq -r '.id' <<<"$run_json")"
             echo "Found successful main validation run $run_id for $GITHUB_SHA."
