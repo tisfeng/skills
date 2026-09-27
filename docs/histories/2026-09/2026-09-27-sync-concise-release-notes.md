@@ -1,8 +1,8 @@
 # 同步 v0.7.1 精简发布日志
 
 - 日期：2026-09-27
-- 状态：active
-- 关联计划：[同步 v0.7.1 精简发布日志](../../exec-plans/active/2026-09-27-sync-concise-release-notes.md)
+- 状态：completed
+- 关联计划：[同步 v0.7.1 精简发布日志](../../exec-plans/completed/2026-09/2026-09-27-sync-concise-release-notes.md)
 
 ## 执行上下文
 
@@ -21,8 +21,15 @@
 
 ## 验证
 
-待填入文档检查及 GitHub 回读结果；纯文档与 Release 元数据更新，不运行单元测试。
+- workflow 日志预检、文档相对链接和 `git diff --check` 通过。
+- 使用 `gh release edit v0.7.1 --notes-file release/changelog/0.7.1.md` 同步正文，回读确认
+  [线上 Release](https://github.com/tisfeng/skills/releases/tag/v0.7.1) 与已提交的精简文件一致。
+- 标题、tag 名称、非 draft/非 prerelease 状态和发布时间均保持不变。
+- 远程及本地 tag object 均为 `b5fa45e7d9bcd8c11768d53728685f094b894a80`，peeled commit
+  均为 `272c2295260b00e300ac28c97caac002bf999315`，没有移动 tag。
+- 纯文档和 Release 元数据变更，未运行单元测试或重跑发布 workflow。
 
 ## 交付
 
-日志同步进行中，完成后归档记录并交给 worktree 集成流程，不 push Git 分支。
+日志同步及验收完成；归档记录后交给用户指定的 worktree 集成流程，不 push Git 分支。
+本次正文修订晚于发布，tag 中的原版日志保留，当前文档与线上正文使用精简版。

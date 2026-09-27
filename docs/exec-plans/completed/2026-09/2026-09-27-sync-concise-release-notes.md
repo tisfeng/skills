@@ -1,6 +1,6 @@
 # 同步 v0.7.1 精简发布日志
 
-- 状态：active
+- 状态：completed
 - 创建日期：2026-09-27
 - 负责人：Codex
 - 关联 Issue/PR：none
@@ -42,13 +42,19 @@
 ## 进度
 
 - [x] 核对状态并准备精简正文。
-- [ ] 本地检查与提交。
-- [ ] GitHub 正文同步及验收。
-- [ ] 归档记录，交付干净源供本地集成。
+- [x] 本地检查与提交。
+- [x] GitHub 正文同步及验收。
+- [x] 归档记录，交付干净源供本地集成。
 
 ## 验证
 
-待填入本地校验和远端正文比对结果。
+- workflow 日志预检、文档相对链接和 `git diff --check` 通过。
+- 使用 `gh release edit v0.7.1 --notes-file release/changelog/0.7.1.md` 同步正文，回读确认
+  [线上 Release](https://github.com/tisfeng/skills/releases/tag/v0.7.1) 与已提交的精简文件一致。
+- 标题、tag 名称、非 draft/非 prerelease 状态和发布时间均保持不变。
+- 远程及本地 tag object 均为 `b5fa45e7d9bcd8c11768d53728685f094b894a80`，peeled commit
+  均为 `272c2295260b00e300ac28c97caac002bf999315`，没有移动 tag。
+- 纯文档和 Release 元数据变更，未运行单元测试或重跑发布 workflow。
 
 ## 完成条件
 
