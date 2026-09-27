@@ -74,17 +74,64 @@ jobs:
             exit 1
           fi
 
-      - name: Create release
+      - name: Validate release changelog
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          tag = os.environ["RELEASE_TAG"]
+          if not re.fullmatch(r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", tag):
+              raise SystemExit(f"Unsupported release tag: {tag}; expected vX.Y.Z.")
+          path = Path("release/changelog") / f"{tag[1:]}.md"
+          if not path.is_file():
+              raise SystemExit(f"Missing {path}; commit the changelog before tagging a new version.")
+          notes = path.read_text(encoding="utf-8")
+          sections = re.split(r"(?m)^##[ \t]+", notes)
+          updates = [section for section in sections[1:] if section.partition("\n")[0].strip() == "更新内容"]
+          if (not notes.startswith("## 更新内容\n") or len(updates) != 1
+                  or not re.search(r"(?m)^- [^\S\n]*\S", updates[0])):
+              raise SystemExit(f"Invalid {path}; start with '## 更新内容' and include a nonempty bullet.")
+          comparison = re.compile(
+              r"\*\*Full Changelog\*\*: https://github\.com/"
+              + re.escape(os.environ["GITHUB_REPOSITORY"])
+              + r"/compare/v[0-9]+\.[0-9]+\.[0-9]+\.\.\." + re.escape(tag)
+          )
+          if not comparison.fullmatch(notes.rstrip().splitlines()[-1]):
+              raise SystemExit(f"Invalid {path}; end with a Full Changelog link to {tag}.")
+          print(f"Validated {path}")
+          PY
+
+      - name: Create and verify release
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "GitHub Release $RELEASE_TAG already exists."
-          else
+          set -euo pipefail
+          notes_file="release/changelog/${RELEASE_TAG#v}.md"
+          release_dir="$(mktemp -d)"
+          trap 'rm -rf "$release_dir"' EXIT
+          # A failed query must not be interpreted as an absent release.
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            --jq '.[].tag_name' >"$release_dir/tags"
+          if ! grep -Fxq "$RELEASE_TAG" "$release_dir/tags"; then
             gh release create "$RELEASE_TAG" \
               --repo "$GITHUB_REPOSITORY" \
               --verify-tag \
               --title "$RELEASE_TAG" \
-              --generate-notes
+              --notes-file "$notes_file"
           fi
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --json tagName,name,body >"$release_dir/release.json"
+          if ! jq -e --arg tag "$RELEASE_TAG" --rawfile notes "$notes_file" '
+            def normalize: gsub("\r\n"; "\n") | sub("\n+$"; "");
+            .tagName == $tag and .name == $tag and
+            ((.body | normalize) == ($notes | normalize))
+          ' "$release_dir/release.json" >/dev/null; then
+            echo "Release $RELEASE_TAG does not match $notes_file; explicitly authorize a repair before updating the release." >&2
+            exit 1
+          fi
+          echo "Verified release $RELEASE_TAG against $notes_file."
