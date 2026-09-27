@@ -821,12 +821,8 @@ prepare_review_worktree() {
   print_worktree_summary
 }
 
-compute_script_sha256() {
-  if command -v shasum >/dev/null 2>&1; then
-    shasum -a 256 "$1" | awk '{print $1}'
-  else
-    sha256sum "$1" | awk '{print $1}'
-  fi
+compute_helper_fingerprint() {
+  python3 "${script_dir}/prepare_helper_fingerprint.py"
 }
 
 finalize_preparation() {
@@ -870,6 +866,8 @@ finalize_preparation() {
   if [[ $mode == merge ]]; then review_mode=integration; fi
   receipt_merge_base=$(git merge-base --all "$base_oid" "$head_oid")
   [[ -n $receipt_merge_base && $receipt_merge_base != *$'\n'* ]] || fail "Review needs an explicit unique merge-base."
+  [[ $(compute_helper_fingerprint) == "$helper_fingerprint" ]] || \
+    fail "Preparation assets changed during execution. Rerun preparation with a stable skill installation."
   phase=complete
 }
 
@@ -879,13 +877,13 @@ emit_receipt() {
     "${head_oid:-}" "${base_oid:-}" "${base_branch:-}" "${receipt_merge_base:-}" \
     "${receipt_path:-}" "${receipt_branch:-}" "${receipt_head:-}" "${receipt_upstream:-}" \
     "$receipt_collision" "$receipt_self_authored_branch" "$checkout_mode" "$mode" \
-    "$head_fetches" "$base_fetches" "$script_file" "$script_sha256" "$reuse_branch" \
+    "$head_fetches" "$base_fetches" "$helper_fingerprint" "$reuse_branch" \
     "$review_mode" "$reused_worktree" "${receipt_ahead:-}" "${receipt_behind:-}" >&3 <<'PY'
 import json
 import sys
 (code, phase, repo, number, head, base, base_branch, merge_base, path, branch,
  checkout_head, upstream, collision, self_branch, checkout_mode, mode,
- head_fetches, base_fetches, script_file, script_sha256, reused_branch,
+ head_fetches, base_fetches, helper_fingerprint, reused_branch,
  review_mode, reused_worktree, ahead, behind) = sys.argv[1:]
 success = code == "0" and phase == "complete"
 print(json.dumps({
@@ -908,7 +906,7 @@ print(json.dumps({
     "collision_reason": collision or None,
     "reused_branch": reused_branch or None,
     "self_authored_branch_reused": self_branch == "true" if success else None,
-    "helper": {"path": script_file, "sha256": script_sha256},
+    "helper": json.loads(helper_fingerprint),
     "source_unchanged": True if success and (checkout_mode == "worktree" or reused_worktree == "true") else None,
     "integration": mode == "merge",
     "actions": {"head_fetches": int(head_fetches), "base_fetches": int(base_fetches)},
@@ -923,8 +921,7 @@ snapshot_file=""
 snapshot_sha256=""
 json_output=false
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-script_file="${script_dir}/$(basename -- "${BASH_SOURCE[0]}")"
-script_sha256=$(compute_script_sha256 "$script_file")
+helper_fingerprint=$(compute_helper_fingerprint)
 phase=arguments
 head_fetches=0
 base_fetches=0

@@ -66,8 +66,22 @@ snapshot 的版本；旧回执不能证明本地领先模式已正确验证。
 - `selection_reason`、`collision_reason`、`reused_branch`、`self_authored_branch_reused`、
   `reused_worktree` 和 `source_unchanged` 解释选择结果；已有 worktree 复用不等于新建隔离环境。
 
-回执中的 `helper.path` 和 `helper.sha256` 也必须与当前实际加载的 helper 一致；不一致时先
-重新准备并重新采集证据。
+回执中的 `helper` 保留 `path` 和入口文件的 `sha256`，并增加：
+
+- `files`：准备入口、指纹采集器、元数据解析器及传递依赖的相对 Skill 路径到 SHA-256 映射。
+- `bundle_sha256`：对该映射按键排序、使用紧凑 JSON（逗号和冒号无空格）、UTF-8 编码后计算
+  SHA-256；安装目录不参与组合哈希。显式依赖清单随准备入口的导入或调用变化同步维护。
+
+跨阶段使用回执前，运行只读命令重新计算当前安装的准备指纹：
+
+```bash
+python3 "<review-pr-skill-dir>/scripts/prepare_helper_fingerprint.py"
+```
+
+比较 `path`、`sha256`、`files` 和 `bundle_sha256`。任一不一致或旧回执缺少新增字段时，
+重新准备并重新采集证据。准备 helper 也在执行前及返回成功回执前比较指纹；缺少必要文件或
+执行期间版本变化时失败，不返回成功回执。这是版本一致性检查，不是安装来源或代码可信性证明。
+新增字段保持准备回执 `schema_version: 2`，不改变远程 snapshot 的字段与版本。
 `failed` 回执保留停止阶段，不自动清理或重启写入。
 
 大 PR 中已使用快照文件时，可按
