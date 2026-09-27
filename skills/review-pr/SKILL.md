@@ -55,7 +55,8 @@ description: 审查 GitHub PR 的准确 head/base diff、关联 issue、CI 和 r
    不重复列为独立 finding。需要 resolve 且已获授权时才读取
    [线程维护](references/thread-resolution.md)。
 5. 结论前按证据协议立即刷新 PR、选定问题证据、checks 和完整 threads/replies，处理所有新活动。
-6. 读取 [PR 审查报告](references/reporting.md)，输出结论、有效问题、线程状态、审查范围和验证。
+6. 读取 [PR 审查报告](references/reporting.md)，输出结论、PR 内容介绍、有效问题、线程状态、
+   审查范围和验证；按报告协议分隔模块和问题卡片。
 
 大 PR 或需要复用快照文件时才读取
 [快照传输协议](references/snapshot-protocol.md)；复杂复审报告可再读取 [完整示例](references/report-example.md)。
