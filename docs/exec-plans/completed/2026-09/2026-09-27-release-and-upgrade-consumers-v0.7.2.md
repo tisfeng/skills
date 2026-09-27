@@ -1,6 +1,6 @@
 # 发布 Skills v0.7.2 并升级消费者
 
-- 状态：active
+- 状态：completed
 - 创建日期：2026-09-27
 - 负责人：Codex
 - 关联 Issue/PR：none
@@ -39,16 +39,16 @@
 
 ## 进度
 
-- [ ] 创建 changelog 与发布提交。
-- [ ] 推送 main、创建 tag 并验收 Release。
-- [ ] 同步三个消费者并验证快照。
-- [ ] 创建消费者本地提交并归档记录。
+- [x] 创建 changelog 与发布提交。
+- [x] 推送 main、创建 tag 并验收 Release。
+- [x] 同步三个消费者并验证快照。
+- [x] 创建消费者本地提交并归档记录。
 
 ## 验证
 
-- 发布仓库运行结构校验、Python 编译、Shell 检查和相关 Skill 测试。
+- 发布仓库结构校验、Python 编译、Shell 检查和相关 Skill 测试通过；记录与发布提交分开补齐。
 - 发布后核对 tag peeled SHA、Release 标题/正文和固定 tag 隔离安装。
-- 消费者逐文件比较六个 Skill 与 v0.7.2 tag，重算目录 hash、运行受管 Skill 测试和 `git diff --check`。
+- 消费者逐文件比较六个 Skill 与 v0.7.2 tag；使用安装器同一 Node `localeCompare` 排序算法重算目录 hash，三项目六个 hash 均与 lock 一致；运行受管 Skill 测试和 `git diff --check`。
 
 ## 完成条件
 
