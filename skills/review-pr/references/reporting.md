@@ -60,7 +60,8 @@ C/F/Q 只表示来源或类型，数字用于稳定跟踪，不表示发现时�
 - 实现方式评估：当前路径、比较依据、替代方案与代价，或“当前方式已足够”的可复核结论。
 - 完整 remote head SHA、frozen base 与 merge-base；latest-base 本地集成快照单列。
 - 本地分支/实际 upstream 或 worktree 路径、分支和原 checkout 状态；本人 PR 的同名分支复用、
-  collision fallback 与原因（如适用）。
+  collision fallback 与原因（如适用）。本地领先时分别列出 checkout SHA、远程审查 SHA 和
+  未纳入审查的本地提交数，说明从冻结 Git 对象取证及本地测试的归属限制。
 - latest-base 是否执行、merge/冲突处理和 head/base ancestry 结果。
 - 实际检查、结果、未运行项和环境阻塞；CI 状态与代码判断分开。
 - 最终刷新的 head、PR `updatedAt`、需求证据与 threads/replies 覆盖，以及新活动的复核结果。
