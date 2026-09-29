@@ -682,6 +682,47 @@ def protected_branches(
     }
 
 
+def protected_branch_description(
+    context: RepositoryContext,
+    branch: str,
+) -> str:
+    matches: list[str] = []
+    if branch == context.base_branch:
+        matches.append(f"PR base {context.base_branch!r}")
+    if branch == context.default_branch:
+        matches.append(f"repository default {context.default_branch!r}")
+    return " and ".join(matches) if matches else "a protected branch"
+
+
+def preflight_branch_safety(
+    repo_root: Path,
+    context: RepositoryContext,
+    args: argparse.Namespace,
+) -> None:
+    branch = current_branch(repo_root)
+    if branch != context.current_branch:
+        raise SubmitPRError(
+            "checkout branch changed during branch preflight: "
+            f"expected {context.current_branch!r}, got {branch!r}"
+        )
+    if branch in {context.base_branch, context.default_branch}:
+        description = protected_branch_description(context, branch)
+        raise SubmitPRError(
+            f"current branch {branch!r} matches protected {description}; "
+            "create and check out a new task branch from the current commit, "
+            "then rerun submit-pr. Existing commits will be preserved."
+        )
+
+    if args.head_branch:
+        validate_branch_name(repo_root, args.head_branch)
+        if args.head_branch in protected_branches(context, args.protected_branch):
+            description = protected_branch_description(context, args.head_branch)
+            raise SubmitPRError(
+                f"head branch {args.head_branch!r} matches protected {description}; "
+                "choose a different task branch"
+            )
+
+
 def resolve_head_branch(
     repo_root: Path,
     current: str | None,
@@ -735,14 +776,15 @@ def build_plan(
     include_remote_branch_check: bool,
     push_url: str | None = None,
 ) -> tuple[dict[str, Any], str]:
-    content = prepare_content(args)
-    body = render_pr_body(content)
     branch = current_branch(repo_root)
     if branch != context.current_branch:
         raise SubmitPRError(
             "checkout branch changed during planning: "
             f"expected {context.current_branch!r}, got {branch!r}"
         )
+    preflight_branch_safety(repo_root, context, args)
+    content = prepare_content(args)
+    body = render_pr_body(content)
     status = parse_status(git_status_output(repo_root))
     head_sha, commits, files = ensure_commit_range(
         repo_root,
@@ -1099,6 +1141,34 @@ def plan_command(args: argparse.Namespace, repo_root: Path) -> dict[str, Any]:
     return plan
 
 
+def preflight_command(args: argparse.Namespace, repo_root: Path) -> dict[str, Any]:
+    previous_locks = os.environ.get("GIT_OPTIONAL_LOCKS")
+    os.environ["GIT_OPTIONAL_LOCKS"] = "0"
+    try:
+        context = resolve_repository_context(args, repo_root)
+        preflight_branch_safety(repo_root, context, args)
+    finally:
+        if previous_locks is None:
+            os.environ.pop("GIT_OPTIONAL_LOCKS", None)
+        else:
+            os.environ["GIT_OPTIONAL_LOCKS"] = previous_locks
+    return {
+        "mode": "preflight",
+        "repository": context.base_repository,
+        "base_remote": context.base_remote,
+        "base": context.base_branch,
+        "default_branch": context.default_branch,
+        "head_repository": context.head_repository,
+        "head_remote": context.head_remote,
+        "head_branch": args.head_branch,
+        "current_branch": context.current_branch,
+        "protected_branches": sorted(
+            protected_branches(context, args.protected_branch)
+        ),
+        "status": "passed",
+    }
+
+
 def apply_command(args: argparse.Namespace, repo_root: Path) -> dict[str, Any]:
     started = time.monotonic()
     timings_ms: dict[str, float] = {}
@@ -1108,6 +1178,7 @@ def apply_command(args: argparse.Namespace, repo_root: Path) -> dict[str, Any]:
         check_github_auth(repo_root)
     with measure_phase(timings_ms, "topology"):
         context = resolve_repository_context(args, repo_root)
+        preflight_branch_safety(repo_root, context, args)
         push_url = unique_push_url(repo_root, context.head_remote)
     with measure_phase(timings_ms, "fetch_base"):
         fetch_base(repo_root, context.base_remote, context.base_branch)
@@ -1188,10 +1259,12 @@ def resolve_repo_root(path: str | None) -> Path:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Plan or submit a GitHub pull request from the current checkout.",
+        description=(
+            "Preflight, plan, or submit a GitHub pull request from the current checkout."
+        ),
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
-    for command in ("plan", "apply"):
+    for command in ("preflight", "plan", "apply"):
         subparser = subparsers.add_parser(command)
         subparser.add_argument("--repo")
         subparser.add_argument("--repo-root")
@@ -1200,6 +1273,8 @@ def build_parser() -> argparse.ArgumentParser:
         subparser.add_argument("--head-remote")
         subparser.add_argument("--head-branch")
         subparser.add_argument("--protected-branch", action="append", default=[])
+        if command == "preflight":
+            continue
         subparser.add_argument("--title", required=True)
         subparser.add_argument("--context", required=True)
         subparser.add_argument("--changes", required=True)
@@ -1220,11 +1295,12 @@ def main() -> int:
         require_supported_python()
         args = build_parser().parse_args()
         repo_root = resolve_repo_root(args.repo_root)
-        result = (
-            plan_command(args, repo_root)
-            if args.command == "plan"
-            else apply_command(args, repo_root)
-        )
+        if args.command == "preflight":
+            result = preflight_command(args, repo_root)
+        elif args.command == "plan":
+            result = plan_command(args, repo_root)
+        else:
+            result = apply_command(args, repo_root)
         print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
         return 0
     except SubmitPRError as error:
