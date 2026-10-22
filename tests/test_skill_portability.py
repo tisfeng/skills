@@ -81,7 +81,7 @@ class SkillPortabilityTests(unittest.TestCase):
             shutil.copytree(REPOSITORY_ROOT / "skills" / name, self.skills / name, ignore=ignored)
         self.standalone_submit = self.root / "standalone-submit-pr" / "submit-pr"
         shutil.copytree(REPOSITORY_ROOT / "skills" / "submit-pr", self.standalone_submit, ignore=ignored)
-        self.assertFalse((self.standalone_submit.parent / "git-commit").exists())
+        shutil.copytree(REPOSITORY_ROOT / "skills" / "git-commit", self.standalone_submit.parent / "git-commit", ignore=ignored)
         fake_bin = self.root / "fake-bin"
         fake_bin.mkdir()
         fake_gh = fake_bin / "gh"
@@ -107,6 +107,25 @@ class SkillPortabilityTests(unittest.TestCase):
             [sys.executable, *arguments], cwd=cwd or self.consumer,
             env=environment or self.environment, text=True, capture_output=True, check=False,
         )
+
+    def test_missing_naming_dependency_fails_without_mutating_consumer(self) -> None:
+        project = self.make_git_project()
+        dependency = self.standalone_submit.parent / "git-commit"
+        shutil.rmtree(dependency)
+        refs_before = self.git(project, "show-ref").stdout
+        result = self.execute(
+            str(self.standalone_submit / "scripts" / "submit_pr.py"), "plan",
+            "--repo-root", str(project),
+            "--title", "feat(cli): validate dependencies",
+            "--context", "Naming needs its installed source.",
+            "--changes", "Check a missing dependency.",
+            "--verification", "- Dependency check.",
+            cwd=project,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Missing git-commit naming dependency", result.stderr)
+        self.assertEqual(self.git(project, "show-ref").stdout, refs_before)
+        self.assertEqual(self.git(project, "status", "--porcelain").stdout, "")
 
     def review_snapshot(self, *arguments: str, environment: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
         return self.execute(str(self.skills / "review-pr" / "scripts" / "review_snapshot.py"), *arguments,

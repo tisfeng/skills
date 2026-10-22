@@ -31,9 +31,8 @@ helper 只接受指向 `github.com` 的 SSH 或 HTTPS remote，并按以下顺�
 
 ## 分支决策
 
-任务分支默认使用 Conventional 格式 `<type>/<kebab-case-summary>`。显式 `--head-branch`
-支持用户或项目既有的其他 Git 合法字面名称，例如 `codex/fix-login`、`feature/login`；不接受
-`@{-1}` 等会被 Git 展开为其他引用的表达式。
+任务名与显式名称校验统一使用 [`git-commit` 的命名工具](../../git-commit/references/branch-naming.md)。
+显式 `--head-branch` 可提供用户指定的其他合法字面名称；普通本地提交不受下面的 PR 来源分支限制。
 
 base branch、GitHub default branch 和重复传入的 `--protected-branch` 都属于保护分支。
 

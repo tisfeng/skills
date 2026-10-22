@@ -7,6 +7,7 @@ import argparse
 from contextlib import contextmanager
 from dataclasses import dataclass
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -53,14 +54,23 @@ CONVENTIONAL_TYPES = (
 TITLE_PATTERN = re.compile(
     rf"^(?:{CONVENTIONAL_TYPES})(?:\([a-z0-9][a-z0-9._/-]*\))?!?:\s+\S.*$"
 )
-BRANCH_PATTERN = re.compile(
-    rf"^(?:{CONVENTIONAL_TYPES})/[a-z0-9]+(?:-[a-z0-9]+)*$"
-)
 MINIMUM_PYTHON = (3, 10)
 
 
 class SubmitPRError(RuntimeError):
     """Raised when PR planning or submission is unsafe."""
+
+
+def branch_policy():
+    """Load the installed git-commit naming dependency, never a host checkout."""
+
+    path = Path(__file__).resolve().parents[2] / "git-commit" / "scripts" / "branch_name.py"
+    if not path.is_file():
+        raise SubmitPRError("Missing git-commit naming dependency; install the complete git-commit skill beside this skill")
+    spec = importlib.util.spec_from_file_location("shared_branch_naming", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def require_supported_python(
@@ -473,11 +483,10 @@ def parse_status(status_text: str) -> dict[str, list[str]]:
 
 
 def validate_branch_name(repo_root: Path, branch: str) -> None:
-    result = git_result(repo_root, "check-ref-format", "--branch", branch)
-    # --branch accepts shortcuts such as @{-1}; subsequent ref operations need
-    # the exact literal name supplied by the caller, not an expanded revision.
-    if result.returncode != 0 or result.stdout.strip() != branch:
-        raise SubmitPRError(f"invalid head branch name: {branch!r}")
+    try:
+        branch_policy().validate_literal(branch)
+    except (ValueError, OSError) as error:
+        raise SubmitPRError(f"invalid head branch name: {branch!r}: {error}") from error
 
 
 def local_branch_sha(repo_root: Path, branch: str) -> str | None:
@@ -554,7 +563,7 @@ def choose_branch_name(
     if requested in protected:
         raise SubmitPRError(f"head branch is protected: {requested!r}")
     for suffix in range(1, 101):
-        candidate = requested if suffix == 1 else f"{requested}-{suffix}"
+        candidate = branch_policy().candidate_name(requested, suffix)
         if candidate in protected:
             continue
         validate_branch_name(repo_root, candidate)
@@ -739,7 +748,7 @@ def resolve_head_branch(
         if requested in protected:
             raise SubmitPRError(f"head branch is protected: {requested!r}")
     current_is_task = current is not None and current not in protected and (
-        BRANCH_PATTERN.fullmatch(current) is not None or requested == current
+        branch_policy().is_task_name(current) or requested == current
     )
     if current_is_task:
         if requested and requested != current:

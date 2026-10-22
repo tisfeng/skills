@@ -20,17 +20,17 @@ PR 正文只使用 Skill 自带的 [固定模板](assets/pull_request_template.m
 
 用户未指定时使用默认模式。用户的只读、确认、暂缓和范围限制持续有效。
 
-只有需要把既有 staged 内容创建为提交时才依赖 `git-commit`。从当前 Skill 清单定位实际入口，
-未提供位置时才检查 [同级安装位置](../git-commit/SKILL.md)。干净的已有提交和纯 plan 不要求
-该依赖；需要提交但依赖缺失时，可继续只读检查，但在提交、fetch 或 push 前停止。
+分支命名依赖完整的 `git-commit` 技能，须同级安装；命名只使用其
+[统一规范与工具](../git-commit/references/branch-naming.md)，不触发提交流程。
+只有需要把既有 staged 内容创建为提交时才执行 `git-commit` 的提交流程。
+依赖缺失时可报告已知事实，但在 Git 写入前停止，不复制或另拟规则。
 
 ## 主流程
 
 1. 读取 [工作流契约](references/workflow.md)，确定用户语言、固定正文、Issue 策略、repository
    拓扑、base/head 分支与恢复规则。
 2. 记录 HEAD、当前分支和 staged、unstaged、untracked 边界。若 checkout 处于 detached 状态：
-   - 用户明确名称或项目既有命名优先；否则根据任务与只读 diff 选择最窄 Angular type，生成
-     `<type>/<english-kebab-case-summary>`。
+   - 根据统一命名规范获取用户明确名称或生成任务候选。
    - 使用 `git check-ref-format --branch` 验证字面名称，并在本轮 `preflight`、`plan` 与 `apply` 都
      显式传入 `--head-branch`；调用 Agent 不在 helper 之外创建或切换分支。
 3. 在创建 staged 提交、fetch 或 apply 前运行 helper `preflight`，使用本轮相同的拓扑参数与

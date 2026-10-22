@@ -16,15 +16,16 @@
 | [`code-simplifier`](skills/code-simplifier/SKILL.md) | 在保持行为不变的前提下简化近期代码改动 | 无 |
 | [`git-commit`](skills/git-commit/SKILL.md) | 起草、创建或汇报经过校验的 Angular-style 本地提交 | 无 |
 | [`review`](skills/review/SKILL.md) | 审查工作树、提交、提交范围、文件或模块 | 无 |
-| [`review-pr`](skills/review-pr/SKILL.md) | 审查 GitHub Pull Request 的准确 diff、问题背景、CI 和 review threads | [`review`](skills/review/SKILL.md) |
-| [`submit-pr`](skills/submit-pr/SKILL.md) | 规划、推送并创建或复用 GitHub Pull Request | 需要提交时使用 [`git-commit`](skills/git-commit/SKILL.md) |
+| [`review-pr`](skills/review-pr/SKILL.md) | 审查 GitHub Pull Request 的准确 diff、问题背景、CI 和 review threads | [`review`](skills/review/SKILL.md)、命名使用 [`git-commit`](skills/git-commit/SKILL.md) |
+| [`submit-pr`](skills/submit-pr/SKILL.md) | 规划、推送并创建或复用 GitHub Pull Request | 命名依赖 [`git-commit`](skills/git-commit/SKILL.md)，需要提交时复用其提交流程 |
 | [`worktree-rebase-merge`](skills/worktree-rebase-merge/SKILL.md) | 提交 worktree 变更、执行 rebase，并安全合并到目标分支 | [`git-commit`](skills/git-commit/SKILL.md) |
 
 项目的 `AGENTS.md`、构建与验证配置和用户明确指令优先于本仓库默认规则；push、merge、发布、
 评论等远程操作只在用户明确授权后执行。
 
-配套 Skill 从实际加载位置发现，缺失时报告受影响步骤，不改写宿主规则；`submit-pr` 只在需要
-创建提交时依赖 `git-commit`。PR 提交默认使用 Conventional 任务分支，可用 `--head-branch`
+配套 Skill 缺失时报告受影响步骤，不改写宿主规则。命名依赖同级完整安装的 `git-commit`；
+`submit-pr` 创建提交时另复用其提交流程。分支名称统一遵循
+[`git-commit` 命名规范](skills/git-commit/references/branch-naming.md)，可用 `--head-branch`
 沿用项目分支名；helper 的 Python 解释器可独立于产品运行时选择。
 
 ## 安装
