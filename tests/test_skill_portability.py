@@ -251,6 +251,15 @@ class SkillPortabilityTests(unittest.TestCase):
     def test_all_copied_skills_run_git_helpers_without_host_rules_or_git_mutation(self) -> None:
         """Copied Git helpers use only their installation and a supplied local repository."""
 
+        # The installed naming dependency must remain unchanged even when the
+        # caller has not disabled Python bytecode caching.
+        self.environment.pop("PYTHONDONTWRITEBYTECODE", None)
+        self.environment.pop("PYTHONPYCACHEPREFIX", None)
+        naming_roots = (self.skills / "git-commit", self.standalone_submit.parent / "git-commit")
+        naming_files_before = {
+            root: {path.relative_to(root): path.read_bytes() for path in root.rglob("*") if path.is_file()}
+            for root in naming_roots
+        }
         self.assertFalse((self.consumer / "AGENTS.md").exists())
         self.assert_markdown_links_stay_in_copied_skill_closure()
         project = self.make_git_project()
@@ -373,6 +382,13 @@ class SkillPortabilityTests(unittest.TestCase):
         self.assertEqual(self.git(project, "status", "--porcelain=v1").stdout, status_under_rules)
         self.assertFalse((self.consumer / "docs").exists())
         self.assertFalse((project / "docs").exists())
+        for root, before in naming_files_before.items():
+            with self.subTest(naming_root=str(root)):
+                self.assertEqual(
+                    {path.relative_to(root): path.read_bytes() for path in root.rglob("*") if path.is_file()},
+                    before,
+                    "Read-only helpers must not write caches into installed skills",
+                )
 
 if __name__ == "__main__":
     unittest.main()

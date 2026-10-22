@@ -69,7 +69,8 @@ def branch_policy():
         raise SubmitPRError("Missing git-commit naming dependency; install the complete git-commit skill beside this skill")
     spec = importlib.util.spec_from_file_location("shared_branch_naming", path)
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    # Loading policy must not write __pycache__ into a managed skill snapshot.
+    exec(compile(path.read_bytes(), str(path), "exec"), module.__dict__)
     return module
 
 

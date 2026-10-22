@@ -31,7 +31,7 @@ PR 正文只使用 Skill 自带的 [固定模板](assets/pull_request_template.m
    拓扑、base/head 分支与恢复规则。
 2. 记录 HEAD、当前分支和 staged、unstaged、untracked 边界。若 checkout 处于 detached 状态：
    - 根据统一命名规范获取用户明确名称或生成任务候选。
-   - 使用 `git check-ref-format --branch` 验证字面名称，并在本轮 `preflight`、`plan` 与 `apply` 都
+   - 使用统一命名工具的 `validate` 校验字面名称，并在本轮 `preflight`、`plan` 与 `apply` 都
      显式传入 `--head-branch`；调用 Agent 不在 helper 之外创建或切换分支。
 3. 在创建 staged 提交、fetch 或 apply 前运行 helper `preflight`，使用本轮相同的拓扑参数与
    `--head-branch`。它只读解析目标 base 和 GitHub default branch。当前分支名与任一分支相同时，
