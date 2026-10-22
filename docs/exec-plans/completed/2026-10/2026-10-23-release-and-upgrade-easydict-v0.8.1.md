@@ -1,6 +1,6 @@
 # 发布 Skills v0.8.1 并更新 Easydict
 
-- 状态：active
+- 状态：completed
 - 创建日期：2026-10-23
 - 负责人：Codex
 - 关联 Issue/PR：none
@@ -41,17 +41,21 @@ submit-pr 已将标题语言与正文语言分离。用户要求发布新版本�
 
 ## 进度
 
-- [ ] 完整验证及发布提交。
-- [ ] 发布及隔离安装验收。
-- [ ] Easydict 更新、验证及本地提交。
-- [ ] 记录归档及发布记录 push。
+- [x] 完整验证及发布提交。
+- [x] 发布及隔离安装验收。
+- [x] Easydict 更新、验证及本地提交。
+- [x] 记录归档及发布记录 push。
 
 ## 验证
 
-- 预检：远程最新 Release 为 v0.8.0，v0.8.1 tag/Release 未占用；origin/main 为 055b0c1a7a50b6275f7e21e775f38d8010f66355，是当前 HEAD 的祖先。
-- 完整矩阵 137 项通过：git-commit 25、worktree-rebase-merge 6、review-pr 64、review 7、共享契约 5、submit-pr 30；Skill 结构、Python 编译、Shell 语法与空白检查通过。
-- 已审阅完整版本差异：公开 Skill 仅修改 submit-pr 的两份语言契约文档，其他差异为历史记录；入口与详细契约一致，无需修改执行脚本。
-- changelog 格式和记录文件名校验通过；待发布与安装验收。
+- 完整矩阵 137 项通过：git-commit 25、worktree-rebase-merge 6、review-pr 64、review 7、共享契约 5、submit-pr 30。Skill 结构、Python 编译、Shell 语法、空白检查、changelog 和记录文件名均通过。
+- 发布提交 `1b40de2c4a1b03dcc117b14a1d089d3445bb2b9c` 已推送 main；同 SHA 的[代码 CI](https://github.com/tisfeng/skills/actions/runs/39813451441)及[文档 CI](https://github.com/tisfeng/skills/actions/runs/39813451546)成功。
+- annotated tag v0.8.1：tag object `d033324dd8e3b882ad8694836693df5dfd5e12a6`，peeled commit 与发布 SHA 一致，本地和远程已核验。
+- [Release v0.8.1](https://github.com/tisfeng/skills/releases/tag/v0.8.1) 发布于 2026-10-22T16:24:06Z，非 draft、非 prerelease；标题精确为 v0.8.1，正文与 tag 内 changelog 全文一致。
+- [Release workflow](https://github.com/tisfeng/skills/actions/runs/39813693889) 成功；skills@1.5.25 从固定远程 tag 隔离安装六个完整技能，56 个文件逐一匹配 archive，目录 hash 和 lock 一致，已安装 CLI 冒烟检查通过。
+- Easydict 通过同版本安装器同步六个受管技能，56 个文件和目录 hash 匹配，submit-pr 现有 30 项测试通过；项目专属和第三方 Skill、第三方 lock 条目及符号链接未变。
+- Easydict 本地提交 `9aa0a6a90c6f75db4ebb8de507cb502e19491a52`，分支 dev，工作树干净，未 push。
+- 本任务仅新增发布文档及同步已验证的文档快照，无生产脚本变更；版本范围与安装增量均已核对，无需独立代码 Review。
 
 ## 完成条件
 
