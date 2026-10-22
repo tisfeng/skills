@@ -296,7 +296,7 @@ validate_reused_branch() {
 
   [[ $checkout_mode == local ]] || \
     fail "--reuse-branch is only supported in local checkout mode."
-  git check-ref-format "refs/heads/${branch}" >/dev/null || \
+  branch_name validate --name "$branch" >/dev/null || \
     fail "Invalid reused review branch '${branch}'."
   case "$branch" in
     dev | main | master | develop | trunk)
@@ -993,7 +993,7 @@ if [[ $checkout_mode == worktree && -n $reuse_branch ]]; then
   fail "--reuse-branch cannot be combined with --worktree."
 fi
 if [[ -n $reuse_branch ]]; then
-  git check-ref-format "refs/heads/${reuse_branch}" >/dev/null || \
+  branch_name validate --name "$reuse_branch" >/dev/null || \
     fail "Invalid reused review branch '${reuse_branch}'."
 fi
 

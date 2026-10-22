@@ -9,6 +9,7 @@ import sys
 import tempfile
 import textwrap
 import unittest
+from unittest.mock import patch
 
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
@@ -696,6 +697,20 @@ class WorkflowIntegrationTests(unittest.TestCase):
         self.assertIn("head branch 'main'", result.stderr)
         self.assertIn("PR base 'main'", result.stderr)
         self.assertNotIn("pr", json.loads(self.state_path.read_text(encoding="utf-8")))
+
+    def test_apply_rejects_missing_naming_dependency_before_fetch(self) -> None:
+        args = submit_pr.build_parser().parse_args(self.command("apply")[2:])
+        error = submit_pr.SubmitPRError("Missing git-commit naming dependency")
+        with (
+            patch.object(submit_pr, "require_clean_worktree"),
+            patch.object(submit_pr, "check_github_auth"),
+            patch.object(submit_pr, "resolve_repository_context", return_value=object()),
+            patch.object(submit_pr, "branch_policy", side_effect=error),
+            patch.object(submit_pr, "fetch_base") as fetch,
+        ):
+            with self.assertRaisesRegex(submit_pr.SubmitPRError, "Missing git-commit"):
+                submit_pr.apply_command(args, self.repo)
+            fetch.assert_not_called()
 
     def test_apply_pushes_same_repo_branch_and_reuses_pr(self) -> None:
         environment = self.environment()

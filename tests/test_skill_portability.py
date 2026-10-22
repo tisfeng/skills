@@ -113,19 +113,25 @@ class SkillPortabilityTests(unittest.TestCase):
         dependency = self.standalone_submit.parent / "git-commit"
         shutil.rmtree(dependency)
         refs_before = self.git(project, "show-ref").stdout
-        result = self.execute(
-            str(self.standalone_submit / "scripts" / "submit_pr.py"), "plan",
-            "--repo-root", str(project),
-            "--title", "feat(cli): validate dependencies",
-            "--context", "Naming needs its installed source.",
-            "--changes", "Check a missing dependency.",
-            "--verification", "- Dependency check.",
-            cwd=project,
-        )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Missing git-commit naming dependency", result.stderr)
-        self.assertEqual(self.git(project, "show-ref").stdout, refs_before)
-        self.assertEqual(self.git(project, "status", "--porcelain").stdout, "")
+        index_before = (project / ".git/index").read_bytes()
+        for command in ("preflight", "plan"):
+            arguments = [command, "--repo-root", str(project)]
+            if command == "plan":
+                arguments += [
+                    "--title", "feat(cli): validate dependencies",
+                    "--context", "Naming needs its installed source.",
+                    "--changes", "Check a missing dependency.",
+                    "--verification", "- Dependency check.",
+                ]
+            result = self.execute(
+                str(self.standalone_submit / "scripts" / "submit_pr.py"),
+                *arguments, cwd=project,
+            )
+            self.assertNotEqual(result.returncode, 0, command)
+            self.assertIn("Missing git-commit naming dependency", result.stderr)
+            self.assertEqual(self.git(project, "show-ref").stdout, refs_before)
+            self.assertEqual((project / ".git/index").read_bytes(), index_before)
+            self.assertEqual(self.git(project, "status", "--porcelain").stdout, "")
 
     def review_snapshot(self, *arguments: str, environment: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
         return self.execute(str(self.skills / "review-pr" / "scripts" / "review_snapshot.py"), *arguments,

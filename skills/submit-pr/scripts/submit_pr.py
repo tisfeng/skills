@@ -708,6 +708,9 @@ def preflight_branch_safety(
     context: RepositoryContext,
     args: argparse.Namespace,
 ) -> None:
+    # This dependency is required even without an explicit --head-branch.
+    # Check it before apply can fetch or callers can commit staged changes.
+    branch_policy()
     branch = current_branch(repo_root)
     if branch != context.current_branch:
         raise SubmitPRError(
