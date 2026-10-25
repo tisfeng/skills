@@ -301,6 +301,62 @@ class ApplyPlanTests(unittest.TestCase):
         graphql.assert_called_once()
         self.assertIn("addPullRequestReviewThreadReply", graphql.call_args.args[0])
 
+    def test_lost_reply_response_is_reused_after_refresh_without_duplicate(self) -> None:
+        remote_thread = collected_thread("thread-1")
+        original_plan = plan(decision(remote_thread))
+        mutations = []
+
+        def fake_graphql(query, **variables):
+            if "addPullRequestReviewThreadReply" in query:
+                mutations.append("reply")
+                remote_thread["comments"].append(
+                    dict(reply_comment(), body=variables["body"])
+                )
+                # The server commits the reply before the client loses its response.
+                raise subprocess.TimeoutExpired(["gh", "api", "graphql"], 60)
+            if "resolveReviewThread" in query:
+                mutations.append("resolve")
+                remote_thread["isResolved"] = True
+                return {"resolveReviewThread": {"thread": {"id": "thread-1", "isResolved": True}}}
+            if "totalCount" in query:
+                return target_final_response(
+                    remote_thread, total_count=len(remote_thread["comments"])
+                )
+            self.assertIn("node(id:$id)", query)
+            return target_response(
+                dict(remote_thread, comments=page(list(remote_thread["comments"])))
+            )
+
+        with patch.object(review_threads, "graphql", side_effect=fake_graphql):
+            failed = review_threads.apply_plan(original_plan)[0]
+            self.assertEqual(failed["status"], "unknown_after_mutation")
+            self.assertEqual(failed["reply_status"], "unknown")
+            self.assertNotIn("reply_id", failed)
+            self.assertFalse(remote_thread["isResolved"])
+            self.assertEqual(mutations, ["reply"])
+
+            stale = review_threads.apply_plan(original_plan)[0]
+            self.assertEqual(stale["status"], "stale_thread")
+            self.assertEqual(mutations, ["reply"])
+
+            refreshed = review_threads.collect_thread("owner/repo", 42, "thread-1")
+            refreshed_decision = decision(refreshed["threads"][0])
+            self.assertNotEqual(
+                refreshed_decision["fingerprint"], original_plan["decisions"][0]["fingerprint"]
+            )
+            resumed = review_threads.apply_plan(plan(refreshed_decision))[0]
+
+        self.assertEqual(resumed["status"], "resolved")
+        self.assertEqual(resumed["reply_status"], "reused")
+        self.assertEqual(resumed["reply_id"], "reply-1")
+        self.assertEqual(resumed["reply_url"], reply_comment()["url"])
+        self.assertEqual(mutations, ["reply", "resolve"])
+        self.assertEqual(
+            [item["id"] for item in remote_thread["comments"]],
+            ["thread-1-comment", "reply-1"],
+        )
+        self.assertTrue(remote_thread["isResolved"])
+
     def test_changes_after_reply_prevent_resolution(self) -> None:
         current = collected_thread("thread-1")
         replied = with_reply(current)
