@@ -1,6 +1,6 @@
 ---
 name: review-pr
-description: 审查 GitHub PR 的准确 head/base diff、关联 issue、CI 和 review threads，交付前刷新。创建 PR 使用 submit-pr；本地审查使用 review。
+description: 审查 GitHub PR 的准确 head/base diff、关联 issue、CI 和 review threads；明确调用时回复并关闭已解决线程，交付前刷新。创建 PR 使用 submit-pr；本地审查使用 review。
 ---
 
 # GitHub PR 审查
@@ -26,8 +26,11 @@ description: 审查 GitHub PR 的准确 head/base diff、关联 issue、CI 和 r
 - **不改变 Git 状态**：遵守用户的只读或不切分支限制，改用可访问的准确远程 diff、源码和评论；
   证据不足时报告限制。
 
-上述本地准备授权不包含产品修复、push、发布评论、approve、删除评论或关闭 PR。
-线程 resolve 需要单独的远程操作授权和当前远程证据。仅方案或解释不执行 Git 准备。
+明确调用本 Skill 审查 PR 时，默认包含检查全部开放线程，并对确认已修复或不再适用的线程
+回复依据后 resolve；该评论维护授权不需要逐条重复确认。用户只读、仅方案、禁止评论或
+限制远程操作时遵守其限制，只检查和报告。隐式选用本 Skill 不自行扩大发布回复的授权；
+按已有任务授权执行。其他产品修复、push、发布独立评论、approve、删除评论或关闭 PR
+仍不包含在上述授权中。仅方案或解释不执行 Git 准备。
 
 ## 核心安全边界
 
@@ -56,8 +59,8 @@ description: 审查 GitHub PR 的准确 head/base diff、关联 issue、CI 和 r
 3. 将 PR 目标、关键验收条件、冻结 base/head 和完整 raw diff 交给 `review`，检查需求满足程度、
    实现方式与代码正确性。
 4. 评估每个开放 thread，包括 outdated、bot 和所有回复。已有评论只放在对应评论条目，
-   不重复列为独立 finding。需要 resolve 且已获授权时才读取
-   [线程维护](references/thread-resolution.md)。
+   不重复列为独立 finding。读取 [线程维护](references/thread-resolution.md) 判定是否已修复或
+   不再适用；在授权范围内先回复依据、确认成功后 resolve，仍有效或证据不足则保持开放。
 5. 如任务包含冲突处理、验证或本地提交，先完成这些获准操作；结论前按证据协议立即刷新 PR、
    选定问题证据、checks 和完整 threads/replies，处理所有新活动。
 6. 生成最终回复前重新读取 [PR 审查报告](references/reporting.md)；此前已读过或上下文摘要中
