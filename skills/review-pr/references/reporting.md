@@ -100,7 +100,7 @@ PR 报告负责最终回复的整体结构；其他 Skill 的结果填入对应�
   说明，此处不重复整段介绍，必要时引用其对应事项。
 - 实现方式评估：当前路径、比较依据、替代方案与代价，或“当前方式已足够”的可复核结论。
 - 完整 remote head SHA、frozen base 与 merge-base；latest-base 本地集成快照单列。
-- 本地分支/实际 upstream 或 worktree 路径、分支和原 checkout 状态；本人 PR 的同名分支复用、
+- 本地分支/实际 upstream 或 worktree 路径、分支和原 checkout 状态；已关联的同名分支复用、
   collision fallback 与原因（如适用）。本地领先时分别列出 checkout SHA、远程审查 SHA 和
   未纳入审查的本地提交数，说明从冻结 Git 对象取证及本地测试的归属限制。
 - latest-base 是否执行、merge/冲突处理和 head/base ancestry 结果。

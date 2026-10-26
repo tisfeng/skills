@@ -20,7 +20,7 @@ description: 审查 GitHub PR 的准确 head/base diff、关联 issue、CI 和 r
 
 - **默认本地审查**：明确请求审查 PR 时，包含必要的 remote 添加、fetch、安全分支创建或
   fast-forward、upstream 设置和 checkout。
-- **隔离 worktree**：只在用户明确要求 worktree、并行或并发 review 时新建；本人 PR 分支
+- **隔离 worktree**：只在用户明确要求 worktree、并行或并发 review 时新建；已关联的 PR 同名分支
   已在其他 worktree 打开时可复用其干净 checkout，后续命令使用回执路径。
 - **latest-base 集成审查**：只在用户明确要求更新最新 base、解决冲突或审查集成结果时使用。
 - **不改变 Git 状态**：遵守用户的只读或不切分支限制，改用可访问的准确远程 diff、源码和评论；
@@ -43,10 +43,11 @@ description: 审查 GitHub PR 的准确 head/base diff、关联 issue、CI 和 r
 - 不覆盖、删除、重命名、rebase、reset、强制更新、stash 或丢弃本地分支、worktree 或变更。
 - 普通审查必须对应 PR 元数据的准确 `headRefOid` 和真实 base/merge-base diff；
   不用 detached HEAD、已 fetch ref 或无关 `origin` 绕过身份检查。
-- 本人 PR 优先复用已核实身份的同名分支及等价 upstream。相同或落后的分支安全准备到远程
-  head；领先时保留额外提交，按冻结 Git 对象审查，不新建 review 分支。回执区分 checkout
-  与 review SHA；源码上下文和验证归属遵循 [证据协议](references/evidence-workflow.md)。
-  本人分支分叉或 upstream 不匹配时停止；其他作者仍按本地准备协议处理 collision fallback。
+- 本地同名分支的 upstream 指向准确 PR head 仓库与分支时，直接复用，不受 PR 作者身份
+  或 remote 别名限制。相同或落后的分支安全准备到远程 head；领先时保留额外提交，按冻结
+  Git 对象审查；分叉时停止，不另建 review 分支绕过。没有同名分支时创建并校验准确 upstream。
+  回执区分 checkout 与 review SHA；源码和验证归属遵循 [证据协议](references/evidence-workflow.md)。
+  未关联或 upstream 不匹配时按本地准备协议处理，不覆盖原关联。
 - `mergeable: CONFLICTING`、`mergeStateStatus: DIRTY` 或 base 领先不构成 latest-base 授权。
 - 除非用户明确要求，审查、准备、冲突处理和线程维护都不 push。审查后保留准备好的
   分支或 worktree，不自动删除。
