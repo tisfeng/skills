@@ -810,15 +810,71 @@ class PreparePRBranchTests(unittest.TestCase):
         self.assertEqual(self._git("branch", "--list", "review/*").stdout, "")
         self._assert_clean_status()
 
+    def test_reuse_branch_fast_forwards_after_remote_head_advances_without_new_branches(self) -> None:
+        branch = "feat/review-fixture"
+        self._create_same_name_branch_with_upstream(
+            remote_name="personal", remote_url="https://github.com/contributor/Scoco.git",
+        )
+        initial = self._json_receipt(self._prepare("--json", viewer_login="reviewer"))
+        names_before = self._git("for-each-ref", "--format=%(refname)", "refs/heads").stdout
+        for starting_branch in (branch, "dev"):
+            with self.subTest(starting_branch=starting_branch):
+                self._git("switch", starting_branch)
+                previous_head = self.head_sha
+                (self.head_source / "feature.txt").write_text(f"updated after {previous_head}\n")
+                self._commit(self.head_source, "test: advance remote PR head")
+                self._git("push", "origin", branch, cwd=self.head_source)
+                self.head_sha = self._git("rev-parse", "HEAD", cwd=self.head_source).stdout.strip()
+                self.assertNotEqual(self.head_sha, previous_head)
+                for _ in range(2):
+                    receipt = self._json_receipt(self._prepare(
+                        "--json", "--reuse-branch", initial["checkout"]["branch"],
+                        "--expected-head", self.head_sha, viewer_login="reviewer",
+                    ))
+                    self.assertEqual(receipt["checkout"]["branch"], branch)
+                    self.assertEqual(receipt["checkout"]["head_sha"], self.head_sha)
+                    self.assertEqual(receipt["checkout"]["upstream"], "personal/" + branch)
+                    self.assertEqual(receipt["review"], {
+                        "head_sha": self.head_sha, "mode": "checkout", "ahead": 0, "behind": 0,
+                    })
+                    self.assertTrue(receipt["linked_pr_branch_reused"])
+                    self.assertEqual(receipt["reused_branch"], branch)
+                    self.assertIsNone(receipt["collision_reason"])
+                    self.assertEqual(
+                        self._git("for-each-ref", "--format=%(refname)", "refs/heads").stdout,
+                        names_before,
+                    )
+                    self._assert_clean_status()
+
     def test_other_authors_linked_divergence_stops_without_new_branch(self) -> None:
         self._create_same_name_branch_with_upstream(
             remote_name="personal", remote_url="https://github.com/contributor/Scoco.git",
         )
         self._git("update-ref", "refs/heads/feat/review-fixture", self.base_sha)
         before = self._git("show-ref", "--heads").stdout
-        result = self._prepare("--json", viewer_login="reviewer")
+        for arguments in ((), ("--reuse-branch", "feat/review-fixture")):
+            with self.subTest(arguments=arguments):
+                result = self._prepare("--json", *arguments, viewer_login="reviewer")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(self._git("show-ref", "--heads").stdout, before)
+                self.assertEqual(self._git("branch", "--show-current").stdout.strip(), "dev")
+                self._assert_clean_status()
+
+    def test_reuse_branch_does_not_fast_forward_with_wrong_upstream(self) -> None:
+        branch = "feat/review-fixture"
+        self._create_same_name_branch_with_upstream(
+            remote_name="personal", remote_url="https://github.com/contributor/Scoco.git",
+        )
+        ancestor = self._git("merge-base", self.base_sha, self.head_sha).stdout.strip()
+        self._git("update-ref", "refs/heads/" + branch, ancestor)
+        self._git("config", "branch." + branch + ".merge", "refs/heads/dev")
+        before = self._git("show-ref", "--heads").stdout
+        result = self._prepare(
+            "--json", "--reuse-branch", branch, "--expected-head", self.head_sha,
+            viewer_login="reviewer",
+        )
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("ahead 1, behind 1", result.stderr)
+        self.assertIn("incompatible upstream", result.stderr)
         self.assertEqual(self._git("show-ref", "--heads").stdout, before)
         self.assertEqual(self._git("branch", "--show-current").stdout.strip(), "dev")
         self._assert_clean_status()

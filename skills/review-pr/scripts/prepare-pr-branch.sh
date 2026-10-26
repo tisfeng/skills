@@ -305,17 +305,6 @@ validate_reused_branch() {
     fail "Reused review branch '${branch}' is checked out in another worktree."
   fi
 
-  actual_head=$(git rev-parse "refs/heads/${branch}")
-  if [[ $actual_head != "$head_oid" ]]; then
-    if [[ $branch == "$head_branch" && $preserve_pr_branch == true && $mode == prepare ]] && \
-      git merge-base --is-ancestor "$head_oid" "$actual_head"; then
-      review_mode=git_objects
-    else
-      fail "Reused review branch '${branch}' is at '${actual_head}', not PR head '${head_oid}'."
-    fi
-  fi
-  expected_local_head=$actual_head
-
   actual_upstream=$(git for-each-ref --format='%(upstream:short)' "refs/heads/${branch}")
   [[ -n $actual_upstream ]] || \
     fail "Reused review branch '${branch}' has no upstream. Re-run preparation to select it safely."
@@ -331,6 +320,21 @@ validate_reused_branch() {
   else
     fail "Reused branch '${branch}' is neither PR head '${head_branch}' nor the expected collision fallback '${expected_fallback}'."
   fi
+
+  actual_head=$(git rev-parse "refs/heads/${branch}")
+  if [[ $actual_head != "$head_oid" ]]; then
+    if [[ $branch == "$head_branch" && $preserve_pr_branch == true ]] && \
+      git merge-base --is-ancestor "$actual_head" "$head_oid"; then
+      # Fast-forward only after switching and rechecking the selected checkout.
+      review_mode=checkout
+    elif [[ $branch == "$head_branch" && $preserve_pr_branch == true && $mode == prepare ]] && \
+      git merge-base --is-ancestor "$head_oid" "$actual_head"; then
+      review_mode=git_objects
+    else
+      fail "Reused review branch '${branch}' is at '${actual_head}', not PR head '${head_oid}'."
+    fi
+  fi
+  expected_local_head=$actual_head
 
   selected_upstream_ref=$actual_upstream
   expected_checkout_upstream=$actual_upstream
@@ -527,6 +531,10 @@ prepare_pr_branch() {
     actual_head=$(git rev-parse HEAD)
     [[ $actual_head == "$expected_local_head" ]] || \
       fail "Prepared reused branch '${reuse_branch}' changed during preparation."
+    if [[ $review_mode == checkout && $actual_head != "$head_oid" ]]; then
+      git merge --ff-only "$head_oid"
+      expected_local_head=$head_oid
+    fi
 
     if [[ $mode == merge ]]; then
       merge_latest_base_into_current_branch "$reuse_branch" "$selected_upstream_ref"

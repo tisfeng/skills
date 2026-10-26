@@ -27,8 +27,9 @@
 
 多阶段 review 必须把首次回执中的 `checkout.branch` 传给 `--reuse-branch`，在回执路径
 继续。helper 复验远程冻结 head、分支身份和 upstream；已关联的同名分支在普通审查中可以领先于
-该 head，按 `git_objects` 模式保留，fallback 分支必须准确匹配。分叉、身份或 upstream 漂移时
-停止，不自动切换到新分支。请求 latest-base 时仍要求分支准确位于远程 head，领先时停止，
+该 head，按 `git_objects` 模式保留，fallback 分支必须准确匹配。PR head 推进时先重新冻结快照并传入新的 `--expected-head`；
+`--reuse-branch` 对准确关联且落后的同名分支仅执行 fast-forward，保留分支名和 upstream。
+分叉、身份或 upstream 漂移时停止，不自动切换到新分支。请求 latest-base 时仍要求分支准确位于远程 head，领先时停止，
 由用户决定额外提交的处理或授权隔离集成，不能把本地提交混入 PR head/base 集成证据。
 
 显式 worktree 模式使用：
