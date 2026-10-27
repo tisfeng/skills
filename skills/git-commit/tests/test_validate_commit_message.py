@@ -346,6 +346,40 @@ class CommitMessageValidatorTests(unittest.TestCase):
             message,
             "language blocks must use matching References URLs",
         )
+        self.assert_invalid(
+            bilingual(
+                english=block()
+                + "\n\n"
+                + references("https://example.com/reference")
+            ),
+            "language blocks must use matching References URLs",
+        )
+
+    def test_rejects_different_bilingual_reference_urls(self) -> None:
+        local = block("fix(agent): 强制校验提交信息", labels=CHINESE_BODY_LABELS)
+        message = bilingual(
+            local=local + "\n\n" + references("https://example.com/first"),
+            english=block() + "\n\n" + references("https://example.com/second"),
+        )
+        self.assert_invalid(
+            message,
+            "language blocks must use matching References URLs",
+        )
+
+    def test_rejects_reversed_bilingual_reference_order(self) -> None:
+        local = block("fix(agent): 强制校验提交信息", labels=CHINESE_BODY_LABELS)
+        message = bilingual(
+            local=local
+            + "\n\n"
+            + references("https://example.com/first", "https://example.com/second"),
+            english=block()
+            + "\n\n"
+            + references("https://example.com/second", "https://example.com/first"),
+        )
+        self.assert_invalid(
+            message,
+            "language blocks must use matching References URLs in the same order",
+        )
 
     def test_requires_ordered_language_appropriate_body_labels(self) -> None:
         legacy = "\n\n".join(
