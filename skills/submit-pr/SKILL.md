@@ -38,14 +38,15 @@ PR 正文只使用 Skill 自带的 [固定模板](assets/pull_request_template.m
    停止并提示用户新建、切换到任务分支后重新运行；即使指定了不同的 `--head-branch` 也不得继续。
    调用 Agent 不自动创建或切换分支、不在保护分支上提交。已有提交会随新分支保留，无需重复创建
    相同提交。显式 head 名称与 base/default 同名时也停止，包括 head 来自 fork 的情况。
-4. `plan` 模式运行 helper `plan` 并展示完整 PR 预览。该模式不 fetch、创建分支、写仓库文件、push
+4. `plan` 模式按第 6 步准备正文并展示完整 PR 预览。该模式不 fetch、创建分支、写仓库文件、push
    或创建 PR。缺少提交或 cached base 时报告预览缺口，不为使 plan 成功而写入。
 5. 默认或 `draft` 模式要求工作树可安全交付：
    - 存在 unstaged 或 untracked 内容时停止，不运行 `git add`。
    - 仅 staged 非空时，按宿主交付规则使用 `git-commit`；工作树干净时复用已有提交。
    - 精确 fetch base ref，检查完整 `<base-remote>/<base>..HEAD` 提交与文件范围。
      范围为空、来源不明或 HEAD 未包含 base 时停止，不自动修正历史。
-6. 根据真实范围补查关联 Issue 和 PR，盘点已有截图，起草 Context、Changes 和 Verification。
+6. 根据真实范围补查关联 Issue 和 PR，按[截图交付流程](references/workflow.md#截图交付)主动查找并复用
+   本对话中已有的验证截图，起草 Context、Changes 和 Verification。
    运行 helper `plan` 并展示语言来源和完整预览。
    默认模式继续；用户要求确认或暂缓时先停止。
 7. 使用相同内容运行 helper `apply`；`draft` 追加 `--draft`。helper 重新发现并校验本地/远程状态，

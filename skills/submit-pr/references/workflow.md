@@ -151,11 +151,15 @@ API、产品名和检查名等技术标识保留原文。
 
 ## 截图交付
 
-1. 盘点本次实际渲染的图片，确认每张图片对应的页面、主题或状态。UI 修改传 `--ui-change`，
-   每张已有可用 HTTPS URL 的图片传 `--screenshot '描述' URL`。全部齐备时截图区域只含图片，
-   部分齐备时追加 `--screenshots-incomplete` 保留补图提示。无 URL 的 UI 修改自动显示提示，
-   无需因此改成 Draft。
-2. 纯 `plan` 仅复用已有 URL，预览中报告已有但待上传的本地文件及其用途。获准交付时，
+1. 生成 PR 预览前，主动检查本对话中的图片、附件、链接和工具产物，包括调用 Skill 之前已有的材料。
+   核对截图是否来自本次 PR 的实际验证，并确认所展示的页面、主题或状态。找到匹配且可访问的
+   截图就直接复用，无需用户再次提供。若图片只在聊天中可见，且无法取得原图或可用 URL，
+   报告该截图及访问缺口。
+   UI 修改传 `--ui-change`，每张已有可用 HTTPS URL 的图片传 `--screenshot '描述' URL`。
+   全部齐备时截图区域只含图片，部分齐备时追加 `--screenshots-incomplete` 保留补图提示。
+   无 URL 的 UI 修改自动显示提示，无需因此改成 Draft。
+2. 纯 `plan` 仅嵌入已有 URL，预览中列出已有但待上传的截图及其用途。获准交付时，主动上传
+   可访问的验证截图文件，包括对话附件和工具产物。
    若能访问 GitHub 的 PR 创建编辑器并上传本地文件，使用
    [GitHub 网页附件](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/attaching-files)
    取得图片 URL，将其交给 helper 渲染，创建仍由 helper 执行。
