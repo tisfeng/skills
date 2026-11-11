@@ -17,6 +17,7 @@ import sys
 import tempfile
 import time
 from typing import Any, Iterator, Sequence
+from urllib.parse import urlsplit
 
 
 PR_BODY_TEMPLATE_PATH = (
@@ -41,6 +42,9 @@ ISSUE_PATTERNS = (
         r"issues/[1-9]\d*/?$"
     ),
     re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[1-9]\d*$"),
+)
+RELATED_PR_PATTERN = re.compile(
+    r"https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/pull/[1-9]\d*/?"
 )
 AUTO_CLOSE_PATTERN = re.compile(
     r"(?i)\b(?:fix(?:e[sd])?|close[sd]?|resolve[sd]?)\s*:?[ \t]+"
@@ -109,6 +113,13 @@ class PRContent:
     ui_change: bool
     draft: bool
     issue_policy: str = "neutral"
+    related_prs: tuple[tuple[str, str], ...] = ()
+    screenshots: tuple[tuple[str, str], ...] = ()
+    screenshots_incomplete: bool = False
+
+    @property
+    def needs_screenshots(self) -> bool:
+        return self.ui_change and (not self.screenshots or self.screenshots_incomplete)
 
 
 @dataclass(frozen=True)
@@ -420,11 +431,46 @@ def validate_content(content: PRContent) -> None:
         raise SubmitPRError("PR changes must not be empty")
     if not content.verification.strip():
         raise SubmitPRError("PR verification must not be empty")
-    if len(set(content.issues)) != len(content.issues):
-        raise SubmitPRError("duplicate linked Issue reference")
+    references = set()
     for issue in content.issues:
-        if not any(pattern.fullmatch(issue.strip()) for pattern in ISSUE_PATTERNS):
+        validate_single_line(issue.strip(), "linked Issue")
+        parts = issue.split(maxsplit=1)
+        if not any(pattern.fullmatch(parts[0]) for pattern in ISSUE_PATTERNS):
             raise SubmitPRError(f"unsupported linked Issue reference: {issue!r}")
+        reference = parts[0].rstrip("/").casefold()
+        if reference in references:
+            raise SubmitPRError("duplicate linked Issue reference")
+        references.add(reference)
+    references.clear()
+    for url, relationship in content.related_prs:
+        if RELATED_PR_PATTERN.fullmatch(url) is None:
+            raise SubmitPRError(f"expected a GitHub pull request URL: {url!r}")
+        validate_single_line(relationship, "PR relationship")
+        reference = url.rstrip("/").casefold()
+        if reference in references:
+            raise SubmitPRError("duplicate related PR reference")
+        references.add(reference)
+    if not content.ui_change and (content.screenshots or content.screenshots_incomplete):
+        raise SubmitPRError("screenshot options require --ui-change")
+    for label, url in content.screenshots:
+        validate_single_line(label, "screenshot label")
+        try:
+            parsed = urlsplit(url)
+            valid_url = (
+                parsed.scheme == "https"
+                and bool(parsed.hostname)
+                and parsed.username is None
+                and parsed.password is None
+            )
+        except ValueError:
+            valid_url = False
+        if not valid_url or re.search(r"[\s\x00-\x1f\x7f<>\\]", url):
+            raise SubmitPRError("screenshot URL must be a valid HTTPS image URL")
+
+
+def validate_single_line(value: str, label: str) -> None:
+    if not value.strip() or len(value.splitlines()) != 1 or re.search(r"[\x00-\x1f\x7f]", value):
+        raise SubmitPRError(f"{label} must be a non-empty single line")
 
 
 def load_pr_body_template() -> str:
@@ -446,12 +492,23 @@ def load_pr_body_template() -> str:
 
 def render_pr_body(content: PRContent) -> str:
     validate_content(content)
+    links = []
+    for issue in content.issues:
+        parts = issue.split(maxsplit=1)
+        links.append("- " + " — ".join(parts))
+    links.extend(f"- {url} — {relationship}" for url, relationship in content.related_prs)
+    screenshots = []
+    for label, url in content.screenshots:
+        alt_text = re.sub(r"([\\\[\]])", r"\\\1", label)
+        screenshots.append(f"![{alt_text}](<{url}>)")
+    if content.needs_screenshots:
+        screenshots.append(UI_SCREENSHOT_NOTICE)
     generated = {
         "context": content.context.strip(),
         "changes": content.changes.strip(),
-        "issues": "\n".join(f"- {issue.strip()}" for issue in content.issues),
+        "issues": "\n".join(links),
         "verification": content.verification.strip(),
-        "screenshots": UI_SCREENSHOT_NOTICE if content.ui_change else "N/A",
+        "screenshots": "\n\n".join(screenshots) if content.ui_change else "N/A",
     }
     template_text = load_pr_body_template()
     body = PR_BODY_TEMPLATE_PLACEHOLDER.sub(
@@ -678,6 +735,9 @@ def prepare_content(args: argparse.Namespace) -> PRContent:
         ui_change=args.ui_change,
         draft=args.draft,
         issue_policy=args.issue_policy,
+        related_prs=tuple((url.strip(), reason.strip()) for url, reason in args.related_pr),
+        screenshots=tuple((label.strip(), url.strip()) for label, url in args.screenshot),
+        screenshots_incomplete=args.screenshots_incomplete,
     )
 
 
@@ -841,7 +901,7 @@ def build_plan(
         "commits": commits,
         "files": files,
         "working_tree": status,
-        "needs_screenshots": content.ui_change,
+        "needs_screenshots": content.needs_screenshots,
     }
     return plan, body
 
@@ -1138,6 +1198,15 @@ def plan_command(args: argparse.Namespace, repo_root: Path) -> dict[str, Any]:
             context,
             include_remote_branch_check=False,
         )
+        if args.verify_pr is not None:
+            if args.verify_pr < 1:
+                raise SubmitPRError("--verify-pr requires a positive PR number")
+            pr = view_pr(repo_root, plan["repository"], str(args.verify_pr))
+            if pr.get("number") != args.verify_pr:
+                raise SubmitPRError("gh pr view returned a different PR number")
+            verify_pr(pr, plan)
+            plan["pr_url"] = pr.get("url")
+            plan["pr_verification"] = pr_verification_receipt(pr)
     finally:
         if previous_locks is None:
             os.environ.pop("GIT_OPTIONAL_LOCKS", None)
@@ -1292,13 +1361,22 @@ def build_parser() -> argparse.ArgumentParser:
         subparser.add_argument("--context", required=True)
         subparser.add_argument("--changes", required=True)
         subparser.add_argument("--verification", required=True)
-        subparser.add_argument("--issue", action="append", default=[])
+        subparser.add_argument("--issue", action="append", default=[], metavar="REF [RELATION]")
+        subparser.add_argument(
+            "--related-pr", action="append", nargs=2, default=[], metavar=("URL", "RELATION"),
+        )
         subparser.add_argument(
             "--issue-policy",
             choices=("neutral", "allow", "forbid"),
             default="neutral",
         )
         subparser.add_argument("--ui-change", action="store_true")
+        subparser.add_argument(
+            "--screenshot", action="append", nargs=2, default=[], metavar=("LABEL", "URL"),
+        )
+        subparser.add_argument("--screenshots-incomplete", action="store_true")
+        if command == "plan":
+            subparser.add_argument("--verify-pr", type=int, metavar="NUMBER")
         subparser.add_argument("--draft", action="store_true")
     return parser
 

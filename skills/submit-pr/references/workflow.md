@@ -85,9 +85,9 @@ PR 标题使用 Angular-style `type(scope): subject`，subject 统一使用英�
 
 1. `背景 / Context`：说明为什么需要本 PR、目标和必要约束。
 2. `变更内容 / Changes`：说明实际改变的行为或实现，不重复验证结果。
-3. `关联 Issue / Linked Issues`：只使用用户提供或有明确证据的引用。
+3. `关联 Issue / Linked Issues`：列出有证据的关联 Issue 和 PR，并简述各自与本次改动的关系。
 4. `验证 / Verification`：只列实际执行的检查及结果；未执行时写明原因。
-5. `截图 / Screenshots`：非 UI 修改使用 `N/A`；UI 修改使用固定补图提示。
+5. `截图 / Screenshots`：非 UI 修改使用 `N/A`；UI 修改内嵌已有图片，确有缺口时保留补图提示。
 
 调用 Agent 不发现或读取目标仓库根目录、`docs/`、`.github/` 或其他位置的 GitHub PR 模板，
 也不把其中的标题、说明或 checklist 合并进正文。目标仓库的明确规则仍可约束语言、证据和 Issue
@@ -119,8 +119,22 @@ API、产品名和检查名等技术标识保留原文。
 在运行 helper 前负责检查标题使用英文、正文与首选语言一致，并在 PR 预览中分别显示标题语言
 和正文语言及来源；helper 只校验格式并原样渲染传入内容，不检测语言或翻译。
 
-- 没有关联 Issue 时保持该区域为空。
-- UI 修改需要补图时不因截图缺失停止，也不自动改为 Draft。
+### 关联证据
+
+在正文预览前，结合任务上下文、提交信息和真实 diff 核对解释改动来由的 Issue 和 PR。沿相关文件、
+删除路径或关键字符串查看 Git 历史，例如使用 `git log <base-ref> -- <paths>`、
+`git log -S <literal> <base-ref> -- <paths>` 或 `git log --follow <base-ref> -- <path>`。
+用历史提交的 PR 编号或 GitHub 的提交关联查询定位引入、替代或临时修复该行为的 PR。
+需要时用只读 `gh issue view`、`gh pr view`、`gh pr diff` 或 GitHub 搜索核对正文与改动，
+确认每条引用和当前 diff 的直接关系。相同文件的例行更新以及只匹配关键词的结果应剔除。
+证据不足时省略该引用，整段没有证据时留空。
+
+- 对每个 Issue 传入 `--issue 'REF 关系说明'`。REF 接受 `#123`、完整 Issue URL 或
+  `owner/repo#123`，旧的纯 REF 输入仍有效。
+- 对每个 PR 传入 `--related-pr URL '关系说明'`，使用明确的 GitHub `/pull/<number>` URL。
+  这类引用作为中性条目渲染。两个选项均可重复，说明使用正文语言，每条一行。
+- 例如，恢复官方图表并删除自建流程时，应核对上游故障、仓库曾采用的临时替代方案，以及引入
+  被删除流程的 PR。例行生成图表的更新 PR 无需列入。
 
 ## Issue 策略
 
@@ -133,8 +147,37 @@ API、产品名和检查名等技术标识保留原文。
 - `forbid`：扫描正文和 base..HEAD 的完整提交信息，并在创建后要求
   `closingIssuesReferences == []`。
 
-`--issue` 本身只接受 `#123`、完整 Issue URL 和 `owner/repo#123`，不会自动加
-`Fixes`、`Closes` 或 `Resolves`。
+关联条目只渲染引用和说明。已有 Issue 自动关闭策略照常应用。
+
+## 截图交付
+
+1. 盘点本次实际渲染的图片，确认每张图片对应的页面、主题或状态。UI 修改传 `--ui-change`，
+   每张已有可用 HTTPS URL 的图片传 `--screenshot '描述' URL`。全部齐备时截图区域只含图片，
+   部分齐备时追加 `--screenshots-incomplete` 保留补图提示。无 URL 的 UI 修改自动显示提示，
+   无需因此改成 Draft。
+2. 纯 `plan` 仅复用已有 URL，预览中报告已有但待上传的本地文件及其用途。获准交付时，
+   若能访问 GitHub 的 PR 创建编辑器并上传本地文件，使用
+   [GitHub 网页附件](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/attaching-files)
+   取得图片 URL，将其交给 helper 渲染，创建仍由 helper 执行。
+3. 需要在创建后补传时，先用 helper 完成创建或复用并验证，随后在同一个 PR 的正文编辑器附加图片。
+   也可以在当前 `gh pr edit --help` 支持 `--attach` 时，使用
+   `gh pr edit <number> --repo <base-owner/base-repo> --attach '<file>#<描述>'` 上传缺失的图片。
+   [GitHub CLI 附件](https://docs.github.com/en/github-cli/github-cli/attaching-files-with-github-cli)
+   会将图片追加到现有正文。开始前读回并核对 PR 身份、head SHA、Draft 和已验证正文，使用稳定、
+   可区分的描述对应各张图片。保留已经取得的 URL，即使命令报错也先回读，因为可能部分成功。
+4. 用全部已取得的 URL 运行 helper `plan` 生成预期正文，沿用 apply 回执中的实际 head 分支
+   （含冲突后缀）。保存前重新读回 PR。当前正文与本次已验证正文及已确认的附件增量一致时，
+   只更新截图区域。确实缺图或上传受阻时保留提示，并报告缺失的图片及原因。发现维护者编辑
+   或身份漂移时停止。
+   每次重试先读取同一个 PR 和已取得的 URL，只上传仍缺失的文件。若前次写入结果不明，先核对
+   正文和编辑器中的上传结果再继续。若无法核实，保留现场并报告缺口。
+5. 用最终参数运行 `plan --verify-pr <number>`，只读核对指定 PR 的完整正文、身份、head SHA、
+   标题、Draft 和 Issue 策略。检查 GitHub 渲染页面中的图片是否实际加载，使用目标读者有权访问
+   的会话核对私有附件。发现图片无法加载时继续处理对应图片，必要时保留补图提示并复验正文。
+   无法检查实际渲染时如实说明。
+
+已创建 PR 的附件恢复从读回该 PR 开始。正文已是最终版本时直接用 `plan --verify-pr` 复验；
+正文仍含提示时从现有附件继续。上传或复验失败后保留原 PR。
 
 ## GitHub 写入
 
@@ -182,7 +225,7 @@ gh pr create \
 远程分支与计划 SHA 相同则复用，是其祖先则普通快进推送，领先或分叉时停止。
 目标仓库要求特定 Issue 策略时显式传入 `--issue-policy`；未指定时使用 `neutral`。
 
-最终 PR 验证完成即满足本 Skill 的远程交付终点。默认不等待 CI，也不要求 checks 成功；仅当用户
+最终 PR 验证和适用的截图交付检查完成后报告结果。默认不等待 CI，也不要求 checks 成功；仅当用户
 或目标仓库规则明确要求时，调用 Agent 才在 helper 返回后单独查询或等待 checks。CI 查询结果不能
 替代上述 PR 状态、身份、正文和 head SHA 验证。
 
@@ -200,10 +243,11 @@ helper 向 stdout 输出 JSON。apply 结果包含：
 - `pr_verification`：最终验证状态、PR state/title、正文 SHA-256 和远程 head SHA
 - `timings_ms`：apply 的 worktree、认证、拓扑、fetch、计划复验、PR 查询、push、创建和最终验证
   等阶段耗时；用于诊断而不是固定性能承诺
-- `needs_screenshots`：UI 修改时为 `true`
+- `needs_screenshots`：UI 修改且缺少截图或显式标记部分齐备时为 `true`
 
 plan 结果包含 `current_branch`；detached checkout 为 `null`。`planned_branch_action` 使用
 `would-create`、`would-update`、`would-reuse` 或 `current`，且不会执行对应 Git 写入。
+`plan --verify-pr <number>` 还返回 `pr_url` 和 `pr_verification`。
 
 调用 Agent 应直接使用成功 JSON 生成最终回执，不再为相同字段读取完整 PR 正文。只有 helper 返回
-成功并且 `pr_verification.status == "passed"` 时才可声称 PR 最终验证通过。
+成功并且 `pr_verification.status == "passed"` 时才可声称对应版本的 PR 正文验证通过。
