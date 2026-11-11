@@ -163,14 +163,19 @@ API、产品名和检查名等技术标识保留原文。
    若能访问 GitHub 的 PR 创建编辑器并上传本地文件，使用
    [GitHub 网页附件](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/attaching-files)
    取得图片 URL，将其交给 helper 渲染，创建仍由 helper 执行。
+   浏览器不可用时，将待上传图片逐张传给 `apply --screenshot-file '描述' PATH`，每张使用不同描述。
+   此时仅当还有未列入本次上传的缺图时传 `--screenshots-incomplete`。
+   helper 只在需要新建 PR 时使用 [GitHub CLI 的 `gh pr create --attach`](https://docs.github.com/en/github-cli/github-cli/attaching-files-with-github-cli)，
+   并验证 GitHub 在截图区域写入的图片链接。已有 PR 保持原正文，缺图继续按下一步处理。
 3. 需要在创建后补传时，先用 helper 创建或复用并验证 PR。将原始 apply JSON 保存到仓库外的任务文件，
    并保留已验证正文的参数。读回该 PR 后，在正文编辑器中上传附件，取得 URL 并保留在任务上下文中。
    此时保持编辑器未保存。补传要求上传与正文保存分开执行。`gh pr edit --attach` 会在上传后自动写回
    上传前读取的正文，不能用于此步骤。无法分开执行时报告上传缺口，保留现有正文。
 4. 使用最终截图 URL 运行 `plan --apply-receipt <file>` 生成预期正文，沿用原始标题、Draft、Issue 策略及
-   非截图内容。在未保存的编辑器中准备好截图区域的改动，再用最近一次已验证正文的参数运行
+   非截图内容。helper 用原始回执的摘要拒绝非截图正文变化。准备好截图区域的改动，再用最近一次已验证正文的参数运行
    `plan --apply-receipt <file> --verify-pr <number>` 立即读回并核对。发现正文或 PR 身份有漂移时停止保存。
-   核对通过后立即保存。若仍有截图缺口，保留补图提示并报告原因。
+   核对通过后立即保存，或使用只更新正文的 `gh pr edit <number> --repo <repo> --body-file <file>`。
+   若仍有截图缺口，保留补图提示并报告原因。
    远程读取和保存是两次操作，期间发现并发编辑时停止。
 5. 用最终正文参数运行同一个 `plan --apply-receipt <file> --verify-pr <number>` 命令，只读核对完整
    正文、PR 身份、原始 head SHA、标题、Draft 和 Issue 策略。再检查 GitHub 渲染页上的图片是否加载，
@@ -180,6 +185,12 @@ API、产品名和检查名等技术标识保留原文。
 附件重试先读取同一个 PR 和已取得的 URL。正文已与最终版本一致时直接复验。正文仍是上次验证版本时，
 复用已取得的 URL，只上传仍缺失的文件。上次上传或保存结果不明时，先核对编辑器和远程正文。
 无法核实时报告缺口，保留原 PR。
+
+CLI 新建部分成功时，即使命令返回非零，helper 也会读回返回 URL 对应的 PR。只有已验证的身份、正文和
+已上传图片才进入回执。以 `uploaded_screenshots` 中的标签和 URL 重建已验证正文，按
+`missing_screenshots` 继续补图。若原始正文没有显式补图提示，重建旧正文时省略
+`--screenshots-incomplete`，在生成仍有缺口的目标正文时再加上。使用同一组本地文件重试可识别和复用
+尚未编辑的 CLI 创建结果。发生后续正文编辑后，使用原始回执复验。
 
 ## GitHub 写入
 
@@ -243,15 +254,19 @@ helper 向 stdout 输出 JSON。apply 结果包含：
 - `push_action`：`created`、`updated` 或 `reused`
 - `pr_action`：`created` 或 `reused`
 - `pr_verification`：最终验证状态、PR state/title、正文 SHA-256 和远程 head SHA
+- `non_screenshot_sha256`：原始非截图正文摘要，用于补传计划与复验
+- 使用 `--screenshot-file` 时额外返回 `uploaded_screenshots`（描述与 URL）、
+  `missing_screenshots`（缺失的描述），并在 CLI 返回错误说明时附上 `attachment_warning`
 - `timings_ms`：apply 的 worktree、认证、拓扑、fetch、计划复验、PR 查询、push、创建和最终验证
   等阶段耗时；用于诊断而不是固定性能承诺
-- `needs_screenshots`：UI 修改且没有截图，或显式传入 `--screenshots-incomplete` 时为 `true`
+- `needs_screenshots`：UI 修改且没有截图、仍有指定附件缺失，或显式传入 `--screenshots-incomplete` 时为 `true`
 
 常规 plan 结果包含 `current_branch`；detached checkout 为 `null`。`planned_branch_action` 使用
 `would-create`、`would-update`、`would-reuse` 或 `current`，且不会执行对应 Git 写入。
 `plan --apply-receipt <file>` 使用成功的 apply JSON 回执渲染后续正文，返回冻结的 PR 身份、head SHA
 和预期正文。追加 `--verify-pr <number>` 时，只读核对回执中的 PR 并返回 `pr_verification`。
 这两种用法均无需重新发现拓扑或检查当前 checkout 的 head 或缓存的 base。
+缺少非截图正文摘要的旧回执无法用于截图补传。
 
 调用 Agent 应直接使用成功 JSON 生成最终回执，不再为相同字段读取完整 PR 正文。只有 helper 返回
 成功并且 `pr_verification.status == "passed"` 时才可声称对应版本的 PR 正文验证通过。

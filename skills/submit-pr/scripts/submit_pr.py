@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -35,6 +36,8 @@ UI_SCREENSHOT_NOTICE = (
     "请在 GitHub PR 页面补充截图。 / "
     "Please add screenshots on the GitHub PR page."
 )
+GITHUB_ASSET_URL = r"https://github\.com/user-attachments/assets/[A-Za-z0-9-]+"
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"}
 ISSUE_PATTERNS = (
     re.compile(r"^#[1-9]\d*$"),
     re.compile(
@@ -488,7 +491,16 @@ def load_pr_body_template() -> str:
     return template_text
 
 
-def render_pr_body(content: PRContent) -> str:
+def escape_image_label(label: str) -> str:
+    return re.sub(r"([\\\[\]])", r"\\\1", label)
+
+
+def render_pr_body_parts(
+    content: PRContent,
+    *,
+    attach_on_create: bool = False,
+) -> tuple[str, str]:
+    """Return the immutable template prefix and its final screenshot section."""
     validate_content(content)
     links = []
     for issue in content.issues:
@@ -497,25 +509,33 @@ def render_pr_body(content: PRContent) -> str:
     links.extend(f"- {url} — {relationship}" for url, relationship in content.related_prs)
     screenshots = []
     for label, url in content.screenshots:
-        alt_text = re.sub(r"([\\\[\]])", r"\\\1", label)
-        screenshots.append(f"![{alt_text}](<{url}>)")
-    if content.needs_screenshots:
+        screenshots.append(f"![{escape_image_label(label)}](<{url}>)")
+    if content.screenshots_incomplete or (content.needs_screenshots and not attach_on_create):
         screenshots.append(UI_SCREENSHOT_NOTICE)
     generated = {
         "context": content.context.strip(),
         "changes": content.changes.strip(),
         "issues": "\n".join(links),
         "verification": content.verification.strip(),
-        "screenshots": "\n\n".join(screenshots) or "N/A",
     }
-    template_text = load_pr_body_template()
-    body = PR_BODY_TEMPLATE_PLACEHOLDER.sub(
+    template_prefix, _, suffix = load_pr_body_template().partition("{{screenshots}}")
+    if suffix.strip():
+        raise SubmitPRError("the screenshot placeholder must end the bundled PR body template")
+    prefix = PR_BODY_TEMPLATE_PLACEHOLDER.sub(
         lambda match: generated[match.group("name")],
-        template_text,
-    ).rstrip() + "\n"
-    if content.issue_policy == "forbid" and AUTO_CLOSE_PATTERN.search(body):
+        template_prefix,
+    )
+    screenshot_section = "\n\n".join(screenshots)
+    if not screenshot_section and not attach_on_create:
+        screenshot_section = "N/A"
+    if content.issue_policy == "forbid" and AUTO_CLOSE_PATTERN.search(prefix + screenshot_section):
         raise SubmitPRError("PR body contains a GitHub auto-closing Issue reference")
-    return body
+    return prefix, screenshot_section
+
+
+def render_pr_body(content: PRContent) -> str:
+    prefix, screenshots = render_pr_body_parts(content)
+    return (prefix + screenshots).rstrip() + "\n"
 
 
 def parse_status(status_text: str) -> dict[str, list[str]]:
@@ -855,7 +875,8 @@ def build_plan(
         )
     preflight_branch_safety(repo_root, context, args)
     content = prepare_content(args)
-    body = render_pr_body(content)
+    body_prefix, screenshots = render_pr_body_parts(content)
+    body = (body_prefix + screenshots).rstrip() + "\n"
     status = parse_status(git_status_output(repo_root))
     head_sha, commits, files = ensure_commit_range(
         repo_root,
@@ -896,6 +917,7 @@ def build_plan(
         "issue_policy": content.issue_policy,
         "title": content.title.strip(),
         "body": body,
+        "body_prefix": body_prefix,
         "commits": commits,
         "files": files,
         "working_tree": status,
@@ -1071,11 +1093,70 @@ def push_head_branch(
     return action
 
 
-def create_pr(repo_root: Path, plan: dict[str, Any]) -> str:
-    descriptor, body_name = tempfile.mkstemp(prefix="submit-pr-", suffix=".md")
-    try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-            handle.write(plan["body"])
+def screenshot_files(args: argparse.Namespace) -> tuple[tuple[str, Path], ...]:
+    files = tuple((label.strip(), Path(path).absolute()) for label, path in args.screenshot_file)
+    if len(files) > 50:
+        raise SubmitPRError("--screenshot-file accepts at most 50 images")
+    for label, path in files:
+        validate_single_line(label, "screenshot label")
+        if args.issue_policy == "forbid" and AUTO_CLOSE_PATTERN.search(label):
+            raise SubmitPRError("screenshot label contains a GitHub auto-closing Issue reference")
+        if path.suffix.lower() not in IMAGE_EXTENSIONS:
+            raise SubmitPRError(f"unsupported screenshot file type: {path}")
+    if len({label for label, _ in files}) != len(files):
+        raise SubmitPRError("--screenshot-file labels must be distinct")
+    return files
+
+
+def validate_creation_attachments(repo_root: Path, files: Sequence[tuple[str, Path]]) -> None:
+    if len({path.resolve() for _, path in files}) != len(files):
+        raise SubmitPRError("the same screenshot file cannot be attached twice")
+    for _, path in files:
+        if not path.is_file():
+            raise SubmitPRError(f"screenshot file is not accessible: {path}")
+    help_text = run_command(["gh", "pr", "create", "--help"], cwd=repo_root).stdout
+    if "--attach" not in help_text:
+        raise SubmitPRError(
+            "this GitHub CLI does not support gh pr create --attach; "
+            "upgrade gh or upload the screenshots in GitHub and pass their URLs"
+        )
+
+
+def read_creation_attachments(
+    pr: dict[str, Any],
+    upload_body: str,
+    files: Sequence[tuple[str, Path]],
+    content: PRContent,
+) -> list[dict[str, str]]:
+    """Accept only the ordered image suffix GitHub CLI can append to the frozen body."""
+    body = pr.get("body")
+    prefix = upload_body.rstrip() + "\n\n"
+    if not isinstance(body, str) or not body.startswith(prefix):
+        raise SubmitPRError("PR body differs from the planned body for screenshot creation")
+    paragraphs = body[len(prefix):].rstrip().split("\n\n")
+    if len(paragraphs) > len(files):
+        raise SubmitPRError("PR body contains more attachments than requested")
+    urls = {url for _, url in content.screenshots}
+    uploaded = []
+    for paragraph, (label, _) in zip(paragraphs, files):
+        alt = re.escape(escape_image_label(label))
+        match = re.fullmatch(rf"!\[{alt}\]\(({GITHUB_ASSET_URL})\)", paragraph)
+        if not match or match[1] in urls:
+            raise SubmitPRError(f"PR body does not contain the expected GitHub attachment for {label!r}")
+        urls.add(match[1])
+        uploaded.append({"label": label, "url": match[1]})
+    return uploaded
+
+
+def create_pr(
+    repo_root: Path,
+    plan: dict[str, Any],
+    body: str,
+    files: Sequence[tuple[str, Path]],
+) -> tuple[str, str]:
+    with tempfile.TemporaryDirectory(prefix="submit-pr-") as directory:
+        body_file = Path(directory) / "body.md"
+        body_file.write_text(body, encoding="utf-8")
         command = [
             "gh",
             "pr",
@@ -1089,20 +1170,28 @@ def create_pr(repo_root: Path, plan: dict[str, Any]) -> str:
             "--title",
             plan["title"],
             "--body-file",
-            body_name,
+            str(body_file),
         ]
         if plan["draft"]:
             command.append("--draft")
-        result = run_command(command, cwd=repo_root)
-    finally:
-        try:
-            os.unlink(body_name)
-        except FileNotFoundError:
-            pass
+        for index, (label, path) in enumerate(files, start=1):
+            # Keep original file paths out of Markdown's attachment rewrite scope.
+            staged_image = Path(directory) / f"screenshot-{index}{path.suffix.lower()}"
+            try:
+                shutil.copyfile(path, staged_image)
+            except OSError as error:
+                raise SubmitPRError(f"cannot prepare screenshot {path}: {error}") from error
+            command.extend(("--attach", f"{staged_image}#{label}"))
+        result = run_command(command, cwd=repo_root, check=not files)
     url = result.stdout.strip().splitlines()[-1] if result.stdout.strip() else ""
-    if not url.startswith("https://github.com/"):
-        raise SubmitPRError("gh pr create did not return a GitHub PR URL")
-    return url
+    repository = re.escape(plan["repository"])
+    if not re.fullmatch(rf"https://github\.com/{repository}/pull/[1-9]\d*", url):
+        detail = result.stderr.strip()
+        raise SubmitPRError(
+            "gh pr create did not return a PR URL for the target repository; "
+            f"check for an existing PR before retrying{': ' + detail if detail else ''}"
+        )
+    return url, result.stderr.strip() if result.returncode else ""
 
 
 def view_pr(repo_root: Path, repository: str, reference: str) -> dict[str, Any]:
@@ -1131,6 +1220,7 @@ def verify_pr(
     plan: dict[str, Any],
     *,
     require_head_sha: bool = True,
+    allow_cli_image_syntax: bool = False,
 ) -> None:
     expected = {
         "state": "OPEN",
@@ -1149,6 +1239,23 @@ def verify_pr(
                 f"{field}: expected {expected_value!r}, got {pr.get(field)!r}"
             )
     actual_body = pr.get("body")
+    if (
+        allow_cli_image_syntax
+        and isinstance(actual_body, str)
+        and actual_body.startswith(plan["body_prefix"])
+    ):
+        prefix = plan["body_prefix"]
+        screenshots = re.sub(
+            rf"^(!\[(?:\\.|[^\]\\\n])*\])\(({GITHUB_ASSET_URL})\)$",
+            r"\1(<\2>)",
+            actual_body[len(prefix):],
+            flags=re.MULTILINE,
+        )
+        paragraphs = screenshots.rstrip().split("\n\n")
+        if paragraphs.count(UI_SCREENSHOT_NOTICE) == 1:
+            paragraphs.remove(UI_SCREENSHOT_NOTICE)
+            paragraphs.append(UI_SCREENSHOT_NOTICE)
+        actual_body = prefix + "\n\n".join(paragraphs)
     if not isinstance(actual_body, str) or actual_body.rstrip() != plan["body"].rstrip():
         mismatches.append("body differs from the generated PR body")
     if plan["issue_policy"] == "forbid" and pr.get("closingIssuesReferences") != []:
@@ -1238,6 +1345,12 @@ def plan_from_apply_receipt(
         or content.issue_policy != receipt.get("issue_policy")
     ):
         raise SubmitPRError("title, Draft state, and Issue policy must match the apply receipt")
+    body_prefix, screenshots = render_pr_body_parts(content)
+    non_screenshot_sha256 = receipt.get("non_screenshot_sha256")
+    if non_screenshot_sha256 is None:
+        raise SubmitPRError("apply receipt lacks a non-screenshot body digest; use an updated apply receipt")
+    if hashlib.sha256(body_prefix.encode("utf-8")).hexdigest() != non_screenshot_sha256:
+        raise SubmitPRError("non-screenshot PR body differs from the original apply receipt")
     plan = {
         "mode": "plan",
         "repository": repository,
@@ -1251,15 +1364,17 @@ def plan_from_apply_receipt(
         "draft": content.draft,
         "issue_policy": content.issue_policy,
         "title": content.title.strip(),
-        "body": render_pr_body(content),
+        "body": (body_prefix + screenshots).rstrip() + "\n",
+        "body_prefix": body_prefix,
         "needs_screenshots": content.needs_screenshots,
     }
     if args.verify_pr is not None:
         pr = view_pr(repo_root, repository, str(number))
         if pr.get("number") != number or pr.get("url") != plan["pr_url"]:
             raise SubmitPRError("gh pr view returned a different PR than the apply receipt")
-        verify_pr(pr, plan)
+        verify_pr(pr, plan, allow_cli_image_syntax=True)
         plan["pr_verification"] = pr_verification_receipt(pr)
+    del plan["body_prefix"]
     return plan
 
 
@@ -1291,6 +1406,7 @@ def plan_command(args: argparse.Namespace, repo_root: Path) -> dict[str, Any]:
         "current": "current",
     }[branch_action]
     plan["mode"] = "plan"
+    del plan["body_prefix"]
     return plan
 
 
@@ -1325,6 +1441,10 @@ def preflight_command(args: argparse.Namespace, repo_root: Path) -> dict[str, An
 def apply_command(args: argparse.Namespace, repo_root: Path) -> dict[str, Any]:
     started = time.monotonic()
     timings_ms: dict[str, float] = {}
+    files = screenshot_files(args)
+    content = prepare_content(args)
+    uploaded: list[dict[str, str]] = []
+    attachment_warning = ""
     with measure_phase(timings_ms, "worktree_check"):
         require_clean_worktree(repo_root)
     with measure_phase(timings_ms, "github_auth"):
@@ -1352,9 +1472,21 @@ def apply_command(args: argparse.Namespace, repo_root: Path) -> dict[str, Any]:
         )
     if len(open_prs) > 1:
         raise SubmitPRError("multiple open PRs exist for the same head/base")
+    upload_body = plan["body"]
+    if files:
+        prefix, screenshots = render_pr_body_parts(content, attach_on_create=True)
+        upload_body = (prefix + screenshots).rstrip() + "\n"
+        if not open_prs:
+            validate_creation_attachments(repo_root, files)
     if open_prs:
         with measure_phase(timings_ms, "existing_pr_validation"):
-            verify_pr(open_prs[0], plan, require_head_sha=False)
+            existing_body = open_prs[0].get("body")
+            if files and (
+                not isinstance(existing_body, str) or existing_body.rstrip() != plan["body"].rstrip()
+            ):
+                uploaded = read_creation_attachments(open_prs[0], upload_body, files, content)
+                plan["body"] = open_prs[0]["body"]
+            verify_pr(open_prs[0], plan, require_head_sha=bool(files))
     with measure_phase(timings_ms, "local_branch"):
         branch_action = ensure_local_branch(
             repo_root,
@@ -1375,13 +1507,18 @@ def apply_command(args: argparse.Namespace, repo_root: Path) -> dict[str, Any]:
         pr_action = "reused"
     else:
         with measure_phase(timings_ms, "pr_create"):
-            pr_reference = create_pr(repo_root, plan)
+            pr_reference, attachment_warning = create_pr(repo_root, plan, upload_body, files)
         pr_action = "created"
     with measure_phase(timings_ms, "final_pr_verification"):
         pr = view_pr(repo_root, plan["repository"], pr_reference)
+        if pr_action == "created" and files:
+            if pr.get("url") != pr_reference:
+                raise SubmitPRError("gh pr view returned a different PR than gh pr create")
+            uploaded = read_creation_attachments(pr, upload_body, files, content)
+            plan["body"] = pr["body"]
         verify_pr(pr, plan)
     timings_ms["total"] = round((time.monotonic() - started) * 1000, 3)
-    return {
+    result = {
         "mode": "apply",
         "repository": plan["repository"],
         "base_remote": plan["base_remote"],
@@ -1399,9 +1536,18 @@ def apply_command(args: argparse.Namespace, repo_root: Path) -> dict[str, Any]:
         "pr_number": pr.get("number"),
         "pr_url": pr.get("url"),
         "pr_verification": pr_verification_receipt(pr),
+        "non_screenshot_sha256": hashlib.sha256(plan["body_prefix"].encode("utf-8")).hexdigest(),
         "timings_ms": timings_ms,
         "needs_screenshots": plan["needs_screenshots"],
     }
+    if files:
+        missing = [label for label, _ in files[len(uploaded):]]
+        result["uploaded_screenshots"] = uploaded
+        result["missing_screenshots"] = missing
+        result["needs_screenshots"] = content.screenshots_incomplete or bool(missing)
+        if attachment_warning:
+            result["attachment_warning"] = attachment_warning
+    return result
 
 
 def resolve_repo_root(path: str | None) -> Path:
@@ -1449,6 +1595,10 @@ def build_parser() -> argparse.ArgumentParser:
         if command == "plan":
             subparser.add_argument("--verify-pr", type=int, metavar="NUMBER")
             subparser.add_argument("--apply-receipt", metavar="PATH")
+        else:
+            subparser.add_argument(
+                "--screenshot-file", action="append", nargs=2, default=[], metavar=("LABEL", "PATH"),
+            )
         subparser.add_argument("--draft", action="store_true")
     return parser
 
