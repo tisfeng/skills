@@ -117,7 +117,6 @@ class RenderTests(unittest.TestCase):
             {"issues": ("#123\n## New heading",)},
             {"related_prs": (("https://github.com/acme/project/issues/42", "Related"),)},
             {"related_prs": (("https://github.com/acme/project/pull/42", "\n"),)},
-            {"screenshots": (("Light", "https://example.org/light.png"),)},
             {"ui_change": True, "screenshots": (("Light", "/tmp/light.png"),)},
             {"ui_change": True, "screenshots": (("Light", "https://example.org/a>b"),)},
         )
@@ -843,7 +842,11 @@ class WorkflowIntegrationTests(unittest.TestCase):
         initial = json.loads(run(self.command("apply", *pending), cwd=self.repo, env=environment).stdout)
         self.assertTrue(initial["needs_screenshots"])
 
-        verify = self.command("plan", "--verify-pr", str(initial["pr_number"]), *ready)
+        receipt_path = self.root / "apply-receipt.json"
+        receipt_path.write_text(json.dumps(initial), encoding="utf-8")
+        verify = self.command(
+            "plan", "--apply-receipt", str(receipt_path), "--verify-pr", str(initial["pr_number"]), *ready,
+        )
         premature = subprocess.run(verify, cwd=self.repo, env=environment, capture_output=True, text=True)
         self.assertNotEqual(premature.returncode, 0)
         self.assertIn("body differs", premature.stderr)
@@ -870,7 +873,7 @@ class WorkflowIntegrationTests(unittest.TestCase):
         self.assertEqual(fetch_head.stat().st_mtime_ns, fetch_before)
         self.assertEqual(
             {tuple(call[:2]) for call in state_after["gh_calls"]},
-            {("repo", "view"), ("pr", "view")},
+            {("pr", "view")},
         )
 
     def test_detached_apply_creates_branch_without_attaching_checkout(self) -> None:

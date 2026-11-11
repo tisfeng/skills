@@ -119,7 +119,7 @@ class PRContent:
 
     @property
     def needs_screenshots(self) -> bool:
-        return self.ui_change and (not self.screenshots or self.screenshots_incomplete)
+        return self.screenshots_incomplete or (self.ui_change and not self.screenshots)
 
 
 @dataclass(frozen=True)
@@ -450,8 +450,6 @@ def validate_content(content: PRContent) -> None:
         if reference in references:
             raise SubmitPRError("duplicate related PR reference")
         references.add(reference)
-    if not content.ui_change and (content.screenshots or content.screenshots_incomplete):
-        raise SubmitPRError("screenshot options require --ui-change")
     for label, url in content.screenshots:
         validate_single_line(label, "screenshot label")
         try:
@@ -508,7 +506,7 @@ def render_pr_body(content: PRContent) -> str:
         "changes": content.changes.strip(),
         "issues": "\n".join(links),
         "verification": content.verification.strip(),
-        "screenshots": "\n\n".join(screenshots) if content.ui_change else "N/A",
+        "screenshots": "\n\n".join(screenshots) or "N/A",
     }
     template_text = load_pr_body_template()
     body = PR_BODY_TEMPLATE_PLACEHOLDER.sub(
@@ -1187,7 +1185,89 @@ def pr_verification_receipt(pr: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def plan_from_apply_receipt(
+    args: argparse.Namespace,
+    repo_root: Path,
+) -> dict[str, Any]:
+    """Render and optionally verify against the original delivery's identity."""
+    try:
+        receipt = json.loads(Path(args.apply_receipt).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise SubmitPRError(f"cannot read apply receipt: {error}") from error
+    if not isinstance(receipt, dict) or receipt.get("mode") != "apply":
+        raise SubmitPRError("--apply-receipt requires the JSON output of a successful apply")
+    verification = receipt.get("pr_verification")
+    number = receipt.get("pr_number")
+    head_sha = receipt.get("head_sha")
+    repository = receipt.get("repository")
+    head_repository = receipt.get("head_repository")
+    if (
+        not isinstance(verification, dict)
+        or verification.get("status") != "passed"
+        or type(number) is not int
+        or number < 1
+        or not isinstance(head_sha, str)
+        or re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", head_sha) is None
+        or verification.get("head_sha") != head_sha
+        or not all(
+            isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", value)
+            for value in (repository, head_repository)
+        )
+        or receipt.get("pr_url") != f"https://github.com/{repository}/pull/{number}"
+        or not all(isinstance(receipt.get(key), str) and receipt[key] for key in ("base", "head"))
+    ):
+        raise SubmitPRError("apply receipt is missing a verified PR identity or head SHA")
+    if args.verify_pr is not None and args.verify_pr != number:
+        raise SubmitPRError("--verify-pr must match the PR number in the apply receipt")
+    topology = {
+        "repo": "repository",
+        "base": "base",
+        "base_remote": "base_remote",
+        "head_branch": "head",
+        "head_remote": "head_remote",
+    }
+    for option, key in topology.items():
+        value = getattr(args, option)
+        if value is not None and value != receipt.get(key):
+            raise SubmitPRError(f"--{option.replace('_', '-')} must match the apply receipt")
+
+    content = prepare_content(args)
+    if (
+        content.title.strip() != verification.get("title")
+        or content.draft is not receipt.get("draft")
+        or content.issue_policy != receipt.get("issue_policy")
+    ):
+        raise SubmitPRError("title, Draft state, and Issue policy must match the apply receipt")
+    plan = {
+        "mode": "plan",
+        "repository": repository,
+        "base": receipt["base"],
+        "head_repository": head_repository,
+        "head_branch": receipt["head"],
+        "head_sha": head_sha,
+        "pr_number": number,
+        "pr_url": receipt["pr_url"],
+        "is_cross_repository": repository.casefold() != head_repository.casefold(),
+        "draft": content.draft,
+        "issue_policy": content.issue_policy,
+        "title": content.title.strip(),
+        "body": render_pr_body(content),
+        "needs_screenshots": content.needs_screenshots,
+    }
+    if args.verify_pr is not None:
+        pr = view_pr(repo_root, repository, str(number))
+        if pr.get("number") != number or pr.get("url") != plan["pr_url"]:
+            raise SubmitPRError("gh pr view returned a different PR than the apply receipt")
+        verify_pr(pr, plan)
+        plan["pr_verification"] = pr_verification_receipt(pr)
+    return plan
+
+
 def plan_command(args: argparse.Namespace, repo_root: Path) -> dict[str, Any]:
+    if args.apply_receipt is not None:
+        return plan_from_apply_receipt(args, repo_root)
+    if args.verify_pr is not None:
+        raise SubmitPRError("--verify-pr requires --apply-receipt from the original delivery")
     previous_locks = os.environ.get("GIT_OPTIONAL_LOCKS")
     os.environ["GIT_OPTIONAL_LOCKS"] = "0"
     try:
@@ -1198,15 +1278,6 @@ def plan_command(args: argparse.Namespace, repo_root: Path) -> dict[str, Any]:
             context,
             include_remote_branch_check=False,
         )
-        if args.verify_pr is not None:
-            if args.verify_pr < 1:
-                raise SubmitPRError("--verify-pr requires a positive PR number")
-            pr = view_pr(repo_root, plan["repository"], str(args.verify_pr))
-            if pr.get("number") != args.verify_pr:
-                raise SubmitPRError("gh pr view returned a different PR number")
-            verify_pr(pr, plan)
-            plan["pr_url"] = pr.get("url")
-            plan["pr_verification"] = pr_verification_receipt(pr)
     finally:
         if previous_locks is None:
             os.environ.pop("GIT_OPTIONAL_LOCKS", None)
@@ -1377,6 +1448,7 @@ def build_parser() -> argparse.ArgumentParser:
         subparser.add_argument("--screenshots-incomplete", action="store_true")
         if command == "plan":
             subparser.add_argument("--verify-pr", type=int, metavar="NUMBER")
+            subparser.add_argument("--apply-receipt", metavar="PATH")
         subparser.add_argument("--draft", action="store_true")
     return parser
 

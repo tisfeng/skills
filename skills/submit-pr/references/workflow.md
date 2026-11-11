@@ -87,7 +87,7 @@ PR 标题使用 Angular-style `type(scope): subject`，subject 统一使用英�
 2. `变更内容 / Changes`：说明实际改变的行为或实现，不重复验证结果。
 3. `关联 Issue / Linked Issues`：列出有证据的关联 Issue 和 PR，并简述各自与本次改动的关系。
 4. `验证 / Verification`：只列实际执行的检查及结果；未执行时写明原因。
-5. `截图 / Screenshots`：非 UI 修改使用 `N/A`；UI 修改内嵌已有图片，确有缺口时保留补图提示。
+5. `截图 / Screenshots`：内嵌已有验证图片，有截图缺口时保留补图提示。非 UI 修改既无图片也无缺口时使用 `N/A`。
 
 调用 Agent 不发现或读取目标仓库根目录、`docs/`、`.github/` 或其他位置的 GitHub PR 模板，
 也不把其中的标题、说明或 checklist 合并进正文。目标仓库的明确规则仍可约束语言、证据和 Issue
@@ -155,33 +155,31 @@ API、产品名和检查名等技术标识保留原文。
    核对截图是否来自本次 PR 的实际验证，并确认所展示的页面、主题或状态。找到匹配且可访问的
    截图就直接复用，无需用户再次提供。若图片只在聊天中可见，且无法取得原图或可用 URL，
    报告该截图及访问缺口。
-   UI 修改传 `--ui-change`，每张已有可用 HTTPS URL 的图片传 `--screenshot '描述' URL`。
-   全部齐备时截图区域只含图片，部分齐备时追加 `--screenshots-incomplete` 保留补图提示。
+   UI 修改传 `--ui-change`。每张已有可用 HTTPS URL 的验证图片都传 `--screenshot '描述' URL`。
+   全部齐备时截图区域只含图片，仍有待交付的截图时追加 `--screenshots-incomplete` 保留补图提示。
    无 URL 的 UI 修改自动显示提示，无需因此改成 Draft。
 2. 纯 `plan` 仅嵌入已有 URL，预览中列出已有但待上传的截图及其用途。获准交付时，主动上传
    可访问的验证截图文件，包括对话附件和工具产物。
    若能访问 GitHub 的 PR 创建编辑器并上传本地文件，使用
    [GitHub 网页附件](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/attaching-files)
    取得图片 URL，将其交给 helper 渲染，创建仍由 helper 执行。
-3. 需要在创建后补传时，先用 helper 完成创建或复用并验证，随后在同一个 PR 的正文编辑器附加图片。
-   也可以在当前 `gh pr edit --help` 支持 `--attach` 时，使用
-   `gh pr edit <number> --repo <base-owner/base-repo> --attach '<file>#<描述>'` 上传缺失的图片。
-   [GitHub CLI 附件](https://docs.github.com/en/github-cli/github-cli/attaching-files-with-github-cli)
-   会将图片追加到现有正文。开始前读回并核对 PR 身份、head SHA、Draft 和已验证正文，使用稳定、
-   可区分的描述对应各张图片。保留已经取得的 URL，即使命令报错也先回读，因为可能部分成功。
-4. 用全部已取得的 URL 运行 helper `plan` 生成预期正文，沿用 apply 回执中的实际 head 分支
-   （含冲突后缀）。保存前重新读回 PR。当前正文与本次已验证正文及已确认的附件增量一致时，
-   只更新截图区域。确实缺图或上传受阻时保留提示，并报告缺失的图片及原因。发现维护者编辑
-   或身份漂移时停止。
-   每次重试先读取同一个 PR 和已取得的 URL，只上传仍缺失的文件。若前次写入结果不明，先核对
-   正文和编辑器中的上传结果再继续。若无法核实，保留现场并报告缺口。
-5. 用最终参数运行 `plan --verify-pr <number>`，只读核对指定 PR 的完整正文、身份、head SHA、
-   标题、Draft 和 Issue 策略。检查 GitHub 渲染页面中的图片是否实际加载，使用目标读者有权访问
-   的会话核对私有附件。发现图片无法加载时继续处理对应图片，必要时保留补图提示并复验正文。
+3. 需要在创建后补传时，先用 helper 创建或复用并验证 PR。将原始 apply JSON 保存到仓库外的任务文件，
+   并保留已验证正文的参数。读回该 PR 后，在正文编辑器中上传附件，取得 URL 并保留在任务上下文中。
+   此时保持编辑器未保存。补传要求上传与正文保存分开执行。`gh pr edit --attach` 会在上传后自动写回
+   上传前读取的正文，不能用于此步骤。无法分开执行时报告上传缺口，保留现有正文。
+4. 使用最终截图 URL 运行 `plan --apply-receipt <file>` 生成预期正文，沿用原始标题、Draft、Issue 策略及
+   非截图内容。在未保存的编辑器中准备好截图区域的改动，再用最近一次已验证正文的参数运行
+   `plan --apply-receipt <file> --verify-pr <number>` 立即读回并核对。发现正文或 PR 身份有漂移时停止保存。
+   核对通过后立即保存。若仍有截图缺口，保留补图提示并报告原因。
+   远程读取和保存是两次操作，期间发现并发编辑时停止。
+5. 用最终正文参数运行同一个 `plan --apply-receipt <file> --verify-pr <number>` 命令，只读核对完整
+   正文、PR 身份、原始 head SHA、标题、Draft 和 Issue 策略。再检查 GitHub 渲染页上的图片是否加载，
+   使用目标读者有权访问的会话核对私有附件。图片加载失败时继续处理，必要时保留补图提示并复验。
    无法检查实际渲染时如实说明。
 
-已创建 PR 的附件恢复从读回该 PR 开始。正文已是最终版本时直接用 `plan --verify-pr` 复验；
-正文仍含提示时从现有附件继续。上传或复验失败后保留原 PR。
+附件重试先读取同一个 PR 和已取得的 URL。正文已与最终版本一致时直接复验。正文仍是上次验证版本时，
+复用已取得的 URL，只上传仍缺失的文件。上次上传或保存结果不明时，先核对编辑器和远程正文。
+无法核实时报告缺口，保留原 PR。
 
 ## GitHub 写入
 
@@ -247,11 +245,13 @@ helper 向 stdout 输出 JSON。apply 结果包含：
 - `pr_verification`：最终验证状态、PR state/title、正文 SHA-256 和远程 head SHA
 - `timings_ms`：apply 的 worktree、认证、拓扑、fetch、计划复验、PR 查询、push、创建和最终验证
   等阶段耗时；用于诊断而不是固定性能承诺
-- `needs_screenshots`：UI 修改且缺少截图或显式标记部分齐备时为 `true`
+- `needs_screenshots`：UI 修改且没有截图，或显式传入 `--screenshots-incomplete` 时为 `true`
 
-plan 结果包含 `current_branch`；detached checkout 为 `null`。`planned_branch_action` 使用
+常规 plan 结果包含 `current_branch`；detached checkout 为 `null`。`planned_branch_action` 使用
 `would-create`、`would-update`、`would-reuse` 或 `current`，且不会执行对应 Git 写入。
-`plan --verify-pr <number>` 还返回 `pr_url` 和 `pr_verification`。
+`plan --apply-receipt <file>` 使用成功的 apply JSON 回执渲染后续正文，返回冻结的 PR 身份、head SHA
+和预期正文。追加 `--verify-pr <number>` 时，只读核对回执中的 PR 并返回 `pr_verification`。
+这两种用法均无需重新发现拓扑或检查当前 checkout 的 head 或缓存的 base。
 
 调用 Agent 应直接使用成功 JSON 生成最终回执，不再为相同字段读取完整 PR 正文。只有 helper 返回
 成功并且 `pr_verification.status == "passed"` 时才可声称对应版本的 PR 正文验证通过。

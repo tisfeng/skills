@@ -51,6 +51,7 @@ PR 正文只使用 Skill 自带的 [固定模板](assets/pull_request_template.m
    默认模式继续；用户要求确认或暂缓时先停止。
 7. 使用相同内容运行 helper `apply`；`draft` 追加 `--draft`。helper 重新发现并校验本地/远程状态，
    精确 push，创建或复用 PR，然后读回验证身份、head SHA、title、body 和 Draft 状态。
+   需要补传时保留原始 apply JSON 回执和已验证正文的参数。
    已有本次交付的已验证 PR 且正在恢复附件时，按下一步读回该 PR 并继续。
 8. 按[截图交付流程](references/workflow.md#截图交付)完成待上传的附件，复验最终正文并检查图片显示。
    报告 PR URL、base/head repository 与 branch、head SHA、Draft、分支/push/PR 动作和截图结果。
@@ -64,7 +65,7 @@ PR 正文只使用 Skill 自带的 [固定模板](assets/pull_request_template.m
   `apply` 后 checkout 仍保持 detached。
 - 不自动添加 reviewer、label、milestone 或 project，不 merge PR、评论或关闭 Issue。
 - `apply` 成功且 `pr_verification.status == "passed"` 后才能报告 PR 已验证；补传截图后以
-  `plan --verify-pr` 的最终回读结果为准。截图显示未确认或仍有缺口时明确报告。
+  `plan --apply-receipt … --verify-pr …` 的最终回读结果为准。截图显示未确认或仍有缺口时明确报告。
   默认不等待 CI；仅在用户或宿主规则要求时查询或等待 checks。
 - 远程实体或已有 PR 与冻结计划不匹配、范围/身份漂移、授权被拒或写后验证失败时，
   保留已完成动作并停止；不覆盖维护者编辑、创建第二个 PR 或重复已成功的远程写入。
