@@ -5,7 +5,7 @@
   <strong>English</strong>
 </p>
 
-A general-purpose collection of Agent Skills for software projects. It covers code simplification, Git commits, code review, pull request delivery, and worktree integration. Skills are installed with the [`skills`](https://github.com/vercel-labs/skills) CLI.
+A general-purpose collection of Agent Skills for software projects. It covers code maintenance, Git commits, code review, pull request delivery, and worktree integration. Skills are installed with the [`skills`](https://github.com/vercel-labs/skills) CLI.
 
 This repository is part of the agent development workflow for [Easydict](https://github.com/tisfeng/Easydict). Easydict uses the Skills published here for day-to-day development, code review, and Git delivery.
 
@@ -13,6 +13,7 @@ This repository is part of the agent development workflow for [Easydict](https:/
 
 | Skill | Purpose | Companion Skill |
 | --- | --- | --- |
+| [`code-maintenance`](skills/code-maintenance/SKILL.md) | Maintain recent or explicitly scoped code through local simplification, clearer file ownership, and safe retirement of unused code | None |
 | [`code-simplifier`](skills/code-simplifier/SKILL.md) | Simplify recent code changes without altering behavior | None |
 | [`git-commit`](skills/git-commit/SKILL.md) | Draft, create, or report validated Angular-style local commits | None |
 | [`review`](skills/review/SKILL.md) | Review a working tree, commit, commit range, file, or module | None |

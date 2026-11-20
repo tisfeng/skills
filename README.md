@@ -5,7 +5,7 @@
   <a href="./README.en.md">English</a>
 </p>
 
-面向通用软件项目的 Agent Skills 集合，覆盖代码简化、Git 提交、代码审查、Pull Request 交付和 worktree 集成。Skills 通过 [`skills`](https://github.com/vercel-labs/skills) CLI 安装。
+面向通用软件项目的 Agent Skills 集合，覆盖代码维护、Git 提交、代码审查、Pull Request 交付和 worktree 集成。Skills 通过 [`skills`](https://github.com/vercel-labs/skills) CLI 安装。
 
 本仓库是 [Easydict](https://github.com/tisfeng/Easydict) Agent 开发流程的一部分；Easydict 使用这里发布的 Skills 组织日常开发、代码审查与 Git 交付。
 
@@ -13,6 +13,7 @@
 
 | Skill | 用途 | 配套 Skill |
 | --- | --- | --- |
+| [`code-maintenance`](skills/code-maintenance/SKILL.md) | 定期清理近期或指定范围内的代码，兼顾局部简化、文件职责和废弃代码退役 | 无 |
 | [`code-simplifier`](skills/code-simplifier/SKILL.md) | 在保持行为不变的前提下简化近期代码改动 | 无 |
 | [`git-commit`](skills/git-commit/SKILL.md) | 起草、创建或汇报经过校验的 Angular-style 本地提交 | 无 |
 | [`review`](skills/review/SKILL.md) | 审查工作树、提交、提交范围、文件或模块 | 无 |
