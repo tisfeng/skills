@@ -13,7 +13,7 @@
 
 | Skill | 用途 | 配套 Skill |
 | --- | --- | --- |
-| [`code-maintenance`](skills/code-maintenance/SKILL.md) | 定期清理近期或指定范围内的代码，兼顾局部简化、文件职责和废弃代码退役，并提示已确认的代码与文档差异 | 无 |
+| [`code-maintenance`](skills/code-maintenance/SKILL.md) | 清理代码、整理 Markdown 长行与段落，并提示已证实的代码与文档差异 | 无 |
 | [`code-simplifier`](skills/code-simplifier/SKILL.md) | 在保持行为不变的前提下简化近期代码改动 | 无 |
 | [`git-commit`](skills/git-commit/SKILL.md) | 起草、创建或汇报经过校验的 Angular-style 本地提交 | 无 |
 | [`review`](skills/review/SKILL.md) | 审查工作树、提交、提交范围、文件或模块 | 无 |
