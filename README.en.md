@@ -54,6 +54,7 @@ Replace `--agent` for another supported agent, or replace `--skill '*'` with a s
 
 ## Additional Notes
 
+- **Recommended usage**: `code-maintenance` defaults to read-only inspection and recommendations (last 7 days, up to 50 commits). Running it on a **weekly schedule** works well for routine maintenance, and you can also target specific files or modules for refactoring, cleanup, or Markdown organization.
 - Branch names follow the [shared naming policy](skills/git-commit/references/branch-naming.md) and require a complete `git-commit` installation beside the consuming Skill; `submit-pr` also reuses its commit workflow when needed and supports `--head-branch` to keep a project's branch name.
 - The Python interpreter used by bundled helper scripts can be selected independently of the target project's runtime.
 

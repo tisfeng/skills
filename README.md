@@ -54,6 +54,7 @@ Skills 写入 `~/.agents/skills/`，lock 位于 `~/.agents/.skill-lock.json`。
 
 ## 补充说明
 
+- **推荐用法**：`code-maintenance` 默认仅只读检查并给出建议方案（近 7 天、最多 50 个提交），推荐配置定时任务**每周运行一次**做例行巡检；也可随时指定文件或模块，明确要求执行代码重构、清理或 Markdown 整理。
 - 分支命名统一遵循 [`git-commit` 命名规范](skills/git-commit/references/branch-naming.md)，依赖同级完整安装的 `git-commit`；`submit-pr` 创建提交时另复用其提交流程，并支持通过 `--head-branch` 沿用项目自定义分支名。
 - Skill 附带的 Python helper 解释器可独立于目标项目的产品运行时选择。
 
