@@ -13,13 +13,14 @@
 
 | Skill | 用途 | 配套 Skill |
 | --- | --- | --- |
-| [`code-maintenance`](skills/code-maintenance/SKILL.md) | 清理代码、整理 Markdown 长行与段落，并提示已证实的代码与文档差异 | 无 |
-| [`code-simplifier`](skills/code-simplifier/SKILL.md) | 在保持行为不变的前提下简化近期代码改动 | 无 |
+| [`code-maintenance`](skills/code-maintenance/SKILL.md) | 简化代码并保留原有行为、整理 Markdown 排版，或检查已证实的代码与文档差异 | 无 |
 | [`git-commit`](skills/git-commit/SKILL.md) | 起草、创建或汇报经过校验的 Angular-style 本地提交 | 无 |
 | [`review`](skills/review/SKILL.md) | 审查工作树、提交、提交范围、文件或模块 | 无 |
 | [`review-pr`](skills/review-pr/SKILL.md) | 审查 GitHub Pull Request 的准确 diff、问题背景、CI 和 review threads | [`review`](skills/review/SKILL.md)、命名使用 [`git-commit`](skills/git-commit/SKILL.md) |
 | [`submit-pr`](skills/submit-pr/SKILL.md) | 规划、推送并创建或复用 GitHub Pull Request | 命名依赖 [`git-commit`](skills/git-commit/SKILL.md)，需要提交时复用其提交流程 |
 | [`worktree-rebase-merge`](skills/worktree-rebase-merge/SKILL.md) | 提交 worktree 变更、执行 rebase，并安全合并到目标分支 | [`git-commit`](skills/git-commit/SKILL.md) |
+
+原独立技能 `code-simplifier` 已并入 `code-maintenance`。升级时请将安装命令和项目规则中的旧名称改为 `code-maintenance`。
 
 项目的 `AGENTS.md`、构建与验证配置和用户明确指令优先于本仓库默认规则；push、merge、发布、
 评论等远程操作只在用户明确授权后执行。

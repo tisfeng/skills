@@ -13,13 +13,15 @@ This repository is part of the agent development workflow for [Easydict](https:/
 
 | Skill | Purpose | Companion Skill |
 | --- | --- | --- |
-| [`code-maintenance`](skills/code-maintenance/SKILL.md) | Clean up code, reflow Markdown prose, and report confirmed discrepancies between code and documentation | None |
-| [`code-simplifier`](skills/code-simplifier/SKILL.md) | Simplify recent code changes without altering behavior | None |
+| [`code-maintenance`](skills/code-maintenance/SKILL.md) | Simplify code while preserving behavior, reflow Markdown prose, or report confirmed discrepancies between code and documentation | None |
 | [`git-commit`](skills/git-commit/SKILL.md) | Draft, create, or report validated Angular-style local commits | None |
 | [`review`](skills/review/SKILL.md) | Review a working tree, commit, commit range, file, or module | None |
 | [`review-pr`](skills/review-pr/SKILL.md) | Review exact GitHub pull request diffs, issue context, CI, and review threads | [`review`](skills/review/SKILL.md), plus [`git-commit`](skills/git-commit/SKILL.md) for naming |
 | [`submit-pr`](skills/submit-pr/SKILL.md) | Plan, push, and create or reuse GitHub pull requests | [`git-commit`](skills/git-commit/SKILL.md) for naming, also reused when a commit is needed |
 | [`worktree-rebase-merge`](skills/worktree-rebase-merge/SKILL.md) | Commit worktree changes, rebase them, and safely merge into a target branch | [`git-commit`](skills/git-commit/SKILL.md) |
+
+The former `code-simplifier` skill is now part of `code-maintenance`. When upgrading, replace the
+old name in installation commands and project instructions with `code-maintenance`.
 
 A project's own `AGENTS.md`, build and validation configuration, and explicit user instructions take precedence over this repository's defaults; remote operations such as pushing, merging, publishing, or commenting run only with explicit user authorization.
 

@@ -14,14 +14,7 @@ import unittest
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-PUBLIC_SKILL_NAMES = (
-    "code-simplifier",
-    "git-commit",
-    "review",
-    "review-pr",
-    "submit-pr",
-    "worktree-rebase-merge",
-)
+PUBLIC_SKILL_NAMES = sorted(entry.parent.name for entry in (REPOSITORY_ROOT / "skills").glob("*/SKILL.md"))
 
 
 FAKE_GH = r'''#!__PYTHON__
