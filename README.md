@@ -13,7 +13,7 @@
 
 | Skill | 用途 | 配套 Skill |
 | --- | --- | --- |
-| [`code-maintenance`](skills/code-maintenance/SKILL.md) | 维护代码与文档：保行为简化代码、梳理文件职责、退役废弃代码、整理 Markdown 并核对文档一致性 | 无 |
+| [`code-maintenance`](skills/code-maintenance/SKILL.md) | 维护代码与文档：保行为简化与重构代码、梳理职责、退役废弃代码、整理 Markdown 并核对文档一致性 | 无 |
 | [`git-commit`](skills/git-commit/SKILL.md) | 起草、创建或汇报经过校验的 Angular-style 本地提交 | 无 |
 | [`review`](skills/review/SKILL.md) | 只读审查本地变更、提交、范围或模块，识别有证据的缺陷与回归 | 无 |
 | [`review-pr`](skills/review-pr/SKILL.md) | 审查 GitHub PR 的准确 diff、关联 Issue、CI 与 review threads | [`review`](skills/review/SKILL.md)、[`git-commit`](skills/git-commit/SKILL.md)（命名） |

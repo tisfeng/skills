@@ -13,7 +13,7 @@ This repository is part of the agent development workflow for [Easydict](https:/
 
 | Skill | Purpose | Companion Skill |
 | --- | --- | --- |
-| [`code-maintenance`](skills/code-maintenance/SKILL.md) | Maintain code and docs: simplify code, organize responsibilities, retire dead code, format Markdown, and check doc consistency | None |
+| [`code-maintenance`](skills/code-maintenance/SKILL.md) | Maintain code and docs: simplify and refactor code, organize responsibilities, retire dead code, format Markdown, and check doc consistency | None |
 | [`git-commit`](skills/git-commit/SKILL.md) | Draft, create, or report validated Angular-style local commits | None |
 | [`review`](skills/review/SKILL.md) | Read-only review of local changes, commits, ranges, or modules for evidence-backed defects | None |
 | [`review-pr`](skills/review-pr/SKILL.md) | Review exact GitHub PR diffs, linked issues, CI, and review threads | [`review`](skills/review/SKILL.md), [`git-commit`](skills/git-commit/SKILL.md) (naming) |
