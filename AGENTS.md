@@ -14,7 +14,7 @@
 用户要求修改、修复、更新、实现或执行时，按以下顺序完成任务：
 
 1. **执行前**：首次写入前读取任务路由要求的专题规则；任何可能产生仓库差异的任务都必须读取
-   `exec-plans/README.md` 与 `histories/README.md`，并按其规则判断 plan 和 history。
+   `docs/exec-plans/README.md` 与 `docs/histories/README.md`，并按其规则判断 plan 和 history。
 2. **实现与验证**：完成范围内修改并运行风险匹配的验证；失败时修复并重新验证。
 3. **Review**：生产代码、复杂逻辑、跨模块或高风险变更在验证通过后使用
    [`review`](.agents/skills/review/SKILL.md) 技能审查；修复有效 finding 后重新验证和审查。

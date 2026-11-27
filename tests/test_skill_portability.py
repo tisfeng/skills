@@ -1,4 +1,4 @@
-"""Consumer-installation regression tests for the review Skill pair."""
+"""Consumer-installation regression tests for published Skills."""
 
 from __future__ import annotations
 
