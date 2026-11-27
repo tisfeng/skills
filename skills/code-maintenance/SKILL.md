@@ -27,12 +27,17 @@ git log HEAD --since-as-filter='7 days ago' --max-count=100 --format=%H
 
 ## 清理代码
 
-选择收益明确、可以独立验证的改动。处理局部简化、去重或可读性时，读取[代码简化指南](references/code-simplifier.md)，按技术栈加载其中的专项规则。
+选择收益明确、可以独立验证的改动。处理局部简化、去重或可读性时，读取[代码简化指南](references/code-simplifier.md)。
 
 - 合并重复规则前，比较调用方的默认值、失败分支和副作用。保留错误传播、重试、取消和恢复语义。
 - 文件混合了不同职责时，根据调用方和依赖确定归属。移动前核对构建目标、模块依赖和资源路径。
 - 退役代码前，核对公开 API 的外部调用约定、动态注册与反射、序列化与旧数据、配置、CI 脚本和工程文件。无法确认用途时保留，并说明缺少的证据。
 - 简化中发现疑似缺陷时，说明触发条件与现有证据。改变可观察行为的修复单独处理；专门查找缺陷或回归时使用 `review`。
+
+涉及对应技术栈的代码维护时，按需读取平台指南：
+
+- [Swift、SwiftUI 与 Xcode](references/swift-xcode.md)
+- [Electron、TypeScript、React 与 IPC](references/electron-typescript.md)
 
 ## 整理 Markdown
 
