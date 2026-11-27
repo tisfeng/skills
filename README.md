@@ -5,7 +5,7 @@
   <a href="./README.en.md">English</a>
 </p>
 
-面向通用软件项目的 Agent Skills 集合，覆盖代码与文档维护、本地与 PR 代码审查、Git 提交、Pull Request 交付和 worktree 集成。Skills 通过 [`skills`](https://github.com/vercel-labs/skills) CLI 安装。
+面向通用软件项目的 Agent Skills 集合，覆盖代码与文档维护、代码审查、Git 提交、PR 交付和 worktree 集成。Skills 通过 [`skills`](https://github.com/vercel-labs/skills) CLI 安装。
 
 本仓库是 [Easydict](https://github.com/tisfeng/Easydict) Agent 开发流程的一部分；Easydict 使用这里发布的 Skills 组织日常开发、代码审查与 Git 交付。
 
@@ -13,15 +13,15 @@
 
 | Skill | 用途 | 配套 Skill |
 | --- | --- | --- |
-| [`code-maintenance`](skills/code-maintenance/SKILL.md) | 维护近期或指定范围的代码与文档：保行为简化冗余逻辑、梳理文件职责、核验并退役废弃代码、整理 Markdown 排版，并双向核对代码与现行文档的一致性（含 Swift/Xcode、Electron/TypeScript 专项指南） | 无 |
-| [`git-commit`](skills/git-commit/SKILL.md) | 校验 staged 范围并起草、创建或汇报 Angular-style 本地 Git 提交 | 无 |
-| [`review`](skills/review/SKILL.md) | 只读审查本地工作树、提交、提交范围、文件或模块，基于代码证据识别缺陷、回归与实现方式问题 | 无 |
-| [`review-pr`](skills/review-pr/SKILL.md) | 审查 GitHub Pull Request 的准确 head/base diff、关联 Issue、CI 状态与 review threads，在授权范围内回复并关闭已解决线程 | [`review`](skills/review/SKILL.md)、命名使用 [`git-commit`](skills/git-commit/SKILL.md) |
-| [`submit-pr`](skills/submit-pr/SKILL.md) | 基于当前已提交变更预检、规划、推送并创建或复用 GitHub Pull Request（支持 Draft 与验证截图复用） | 命名依赖 [`git-commit`](skills/git-commit/SKILL.md)，需要提交时复用其提交流程 |
-| [`worktree-rebase-merge`](skills/worktree-rebase-merge/SKILL.md) | 提交当前 worktree 变更、rebase 到目标分支，并从目标 worktree 安全完成本地合并 | [`git-commit`](skills/git-commit/SKILL.md) |
+| [`code-maintenance`](skills/code-maintenance/SKILL.md) | 维护代码与文档：保行为简化代码、梳理文件职责、退役废弃代码、整理 Markdown 并核对文档一致性 | 无 |
+| [`git-commit`](skills/git-commit/SKILL.md) | 起草、创建或汇报经过校验的 Angular-style 本地提交 | 无 |
+| [`review`](skills/review/SKILL.md) | 只读审查本地变更、提交、范围或模块，识别有证据的缺陷与回归 | 无 |
+| [`review-pr`](skills/review-pr/SKILL.md) | 审查 GitHub PR 的准确 diff、关联 Issue、CI 与 review threads | [`review`](skills/review/SKILL.md)、[`git-commit`](skills/git-commit/SKILL.md)（命名） |
+| [`submit-pr`](skills/submit-pr/SKILL.md) | 基于已提交变更预检、推送并创建或复用 GitHub PR | [`git-commit`](skills/git-commit/SKILL.md)（命名与按需提交） |
+| [`worktree-rebase-merge`](skills/worktree-rebase-merge/SKILL.md) | 提交 worktree 变更、rebase 到目标分支并安全完成本地合并 | [`git-commit`](skills/git-commit/SKILL.md) |
 
 > [!NOTE]
-> 原独立技能 `code-simplifier` 已并入 `code-maintenance`。从旧版本升级时，请将安装命令、项目规则及工作流中的旧名称替换为 `code-maintenance`。
+> 原独立技能 `code-simplifier` 已并入 `code-maintenance`。升级时请将安装命令和项目规则中的旧名称改为 `code-maintenance`。
 
 - **规则优先级与授权**：项目的 `AGENTS.md`、构建与验证配置以及用户明确指令优先于本仓库默认规则；push、merge、发布、评论等远程操作仅在用户明确授权后执行。
 - **配套依赖**：配套 Skill 缺失时会如实报告受影响步骤，不改写宿主规则。
@@ -50,7 +50,7 @@ npx skills add tisfeng/skills --skill '*' --agent codex --yes --global
 
 Skills 写入 `~/.agents/skills/`，lock 位于 `~/.agents/.skill-lock.json`。
 
-如需安装到其他支持的 Agent，可将 `--agent codex` 替换为对应 Agent 名称；如需按需安装单个技能，可将 `--skill '*'` 替换为具体技能名（例如 `--skill code-maintenance`）。
+可按需替换 `--agent` 指定其他 Agent，或将 `--skill '*'` 替换为具体技能名单独安装。
 
 ## 补充说明
 
